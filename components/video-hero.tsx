@@ -30,6 +30,7 @@ export function VideoHero({
 }: VideoHeroProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [loaded, setLoaded] = useState(false)
+  const [countdown, setCountdown] = useState<ReturnType<typeof getCountdown>>(null)
 
   useEffect(() => {
     if (mediaType !== "video") {
@@ -40,6 +41,15 @@ export function VideoHero({
     if (!video) return
     video.play().catch(() => {})
   }, [mediaType])
+
+  // Countdown runs client-side only to avoid hydration mismatch
+  useEffect(() => {
+    setCountdown(getCountdown(eventDate))
+    const interval = setInterval(() => {
+      setCountdown(getCountdown(eventDate))
+    }, 60_000)
+    return () => clearInterval(interval)
+  }, [eventDate])
 
   return (
     <section className="relative flex h-dvh w-full flex-col items-center justify-center overflow-hidden">
@@ -85,29 +95,25 @@ export function VideoHero({
           <span>{eventLocation}</span>
         </div>
 
-        {/* Countdown */}
-        {(() => {
-          const countdown = getCountdown(eventDate)
-          if (!countdown || countdown.isPast) return null
-          return (
-            <div className="flex items-center gap-4">
-              {[
-                { value: countdown.days, label: "Days" },
-                { value: countdown.hours, label: "Hours" },
-                { value: countdown.minutes, label: "Min" },
-              ].map((unit) => (
-                <div key={unit.label} className="flex flex-col items-center gap-0.5">
-                  <span className="text-3xl font-bold tabular-nums text-white sm:text-4xl">
-                    {String(unit.value).padStart(2, "0")}
-                  </span>
-                  <span className="text-[10px] tracking-[0.2em] font-medium text-white/40 uppercase">
-                    {unit.label}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )
-        })()}
+        {/* Countdown (client-only to avoid hydration mismatch) */}
+        {countdown && !countdown.isPast && (
+          <div className="flex items-center gap-4">
+            {[
+              { value: countdown.days, label: "Days" },
+              { value: countdown.hours, label: "Hours" },
+              { value: countdown.minutes, label: "Min" },
+            ].map((unit) => (
+              <div key={unit.label} className="flex flex-col items-center gap-0.5">
+                <span className="text-3xl font-bold tabular-nums text-white sm:text-4xl">
+                  {String(unit.value).padStart(2, "0")}
+                </span>
+                <span className="text-[10px] tracking-[0.2em] font-medium text-white/40 uppercase">
+                  {unit.label}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
 
         <p className="max-w-md text-base leading-relaxed text-white/65 text-pretty">
           {eventDescription}
