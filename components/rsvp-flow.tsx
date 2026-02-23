@@ -32,12 +32,14 @@ export function RsvpFlow({ pages, fontClass, eventName }: RsvpFlowProps) {
     setLoading(true)
     setError("")
     try {
+      console.log("[v0] Sending code for phone:", phone)
       const res = await fetch("/api/auth/send-code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone }),
       })
       const data = await res.json()
+      console.log("[v0] Send code response:", res.status, data)
       if (!res.ok) {
         setError(data.error || "Failed to send code")
         return
@@ -51,17 +53,20 @@ export function RsvpFlow({ pages, fontClass, eventName }: RsvpFlowProps) {
     }
   }, [phone])
 
-  const handleVerifyCode = useCallback(async () => {
-    if (otp.length < 6) return
+  const handleVerifyCode = useCallback(async (codeOverride?: string) => {
+    const codeToVerify = codeOverride || otp
+    console.log("[v0] Verifying code:", codeToVerify, "phone:", phone, "otp state:", otp)
+    if (codeToVerify.length < 6) return
     setLoading(true)
     setError("")
     try {
       const res = await fetch("/api/auth/verify-code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, code: otp }),
+        body: JSON.stringify({ phone, code: codeToVerify }),
       })
       const data = await res.json()
+      console.log("[v0] Verify response:", res.status, data)
       if (!res.ok) {
         setError(data.error || "Invalid code")
         return
@@ -225,15 +230,15 @@ export function RsvpFlow({ pages, fontClass, eventName }: RsvpFlowProps) {
                   maxLength={6}
                   value={otp}
                   onChange={(value) => setOtp(value)}
-                  onComplete={() => handleVerifyCode()}
-                  containerClassName="gap-2"
+                  onComplete={(value) => handleVerifyCode(value)}
+                  containerClassName="gap-3"
                 >
-                  <InputOTPGroup>
+                  <InputOTPGroup className="gap-3">
                     {[0, 1, 2, 3, 4, 5].map((i) => (
                       <InputOTPSlot
                         key={i}
                         index={i}
-                        className="h-14 w-12 rounded-xl border-2 border-white/20 bg-white/10 text-xl text-white backdrop-blur-sm sm:h-16 sm:w-14"
+                        className="!h-14 !w-12 !rounded-xl !border-2 !border-white/20 bg-white/10 text-xl text-white backdrop-blur-sm sm:!h-16 sm:!w-14"
                       />
                     ))}
                   </InputOTPGroup>
