@@ -1,12 +1,16 @@
 import { NextResponse } from "next/server"
-import { verifyOTP, createSession, hasGuestResponded } from "@/lib/store"
+import { verifyOTP, createSession, hasGuestResponded, getEventConfig } from "@/lib/store"
 
 export async function POST(request: Request) {
   try {
-    const { phone, code } = await request.json()
+    const { phone, code, eventId } = await request.json()
 
-    if (!phone || !code) {
-      return NextResponse.json({ error: "Phone and code are required" }, { status: 400 })
+    if (!phone || !code || !eventId) {
+      return NextResponse.json({ error: "Phone, code, and eventId are required" }, { status: 400 })
+    }
+
+    if (!getEventConfig(eventId)) {
+      return NextResponse.json({ error: "Invalid event" }, { status: 400 })
     }
 
     const digits = phone.replace(/\D/g, "")
@@ -16,8 +20,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid or expired code" }, { status: 401 })
     }
 
-    const sessionId = createSession(digits)
-    const alreadyResponded = hasGuestResponded(digits)
+    const sessionId = createSession(eventId, digits)
+    const alreadyResponded = hasGuestResponded(eventId, digits)
 
     return NextResponse.json({
       success: true,

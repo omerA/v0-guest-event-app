@@ -2,6 +2,7 @@ import Link from "next/link"
 import { CalendarDays, MapPin, Clock, Users } from "lucide-react"
 
 interface EventDetailsProps {
+  eventId: string
   eventName: string
   eventDate: string
   eventLocation: string
@@ -10,6 +11,7 @@ interface EventDetailsProps {
 }
 
 export function EventDetails({
+  eventId,
   eventName,
   eventDate,
   eventLocation,
@@ -58,7 +60,7 @@ export function EventDetails({
         </p>
 
         <Link
-          href="/rsvp"
+          href={`/event/${eventId}/rsvp`}
           className="inline-flex items-center justify-center rounded-full border border-white/20 bg-white/5 px-10 py-4 text-lg font-semibold text-white backdrop-blur-sm transition-all hover:bg-white/10 hover:border-white/30"
         >
           Reserve Your Spot

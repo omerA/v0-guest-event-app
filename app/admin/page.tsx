@@ -1,17 +1,16 @@
 import { AdminDashboard } from "@/components/admin-dashboard"
-import { Sparkles, ArrowLeft } from "lucide-react"
-import Link from "next/link"
+import { Sparkles } from "lucide-react"
 
 export const metadata = {
   title: "Admin - Event Dashboard",
-  description: "Manage your event, design questions, and view guest responses",
+  description: "Manage your events, design questions, and view guest responses",
 }
 
 export default function AdminPage() {
   return (
     <main className="min-h-svh bg-background">
       <div className="mx-auto max-w-5xl px-4 pb-12">
-        <header className="flex items-center justify-between py-6">
+        <header className="flex items-center py-6">
           <div className="flex items-center gap-2.5">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
               <Sparkles className="h-4 w-4 text-primary-foreground" />
@@ -20,13 +19,6 @@ export default function AdminPage() {
               Event Dashboard
             </span>
           </div>
-          <Link
-            href="/"
-            className="flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Guest view
-          </Link>
         </header>
 
         <AdminDashboard />

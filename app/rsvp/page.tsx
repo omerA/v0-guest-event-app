@@ -1,23 +1,12 @@
-import { getEventConfig } from "@/lib/store"
-import { getFontClass } from "@/lib/fonts"
-import { RsvpFlow } from "@/components/rsvp-flow"
+import { redirect } from "next/navigation"
+import { getAllEvents } from "@/lib/store"
 
-export const metadata = {
-  title: "RSVP",
-  description: "Confirm your attendance and preferences",
-}
+export default function LegacyRsvpPage() {
+  const events = getAllEvents()
 
-export default function RsvpPage() {
-  const config = getEventConfig()
-  const fontClass = getFontClass(config.fontFamily)
+  if (events.length > 0) {
+    redirect(`/event/${events[0].id}/rsvp`)
+  }
 
-  return (
-    <main className="relative h-dvh w-full overflow-hidden">
-      <RsvpFlow
-        pages={config.pages}
-        fontClass={fontClass}
-        eventName={config.name}
-      />
-    </main>
-  )
+  redirect("/admin")
 }

@@ -21,13 +21,14 @@ export interface EventPage {
   title: string
   subtitle?: string
   questions: Question[]
-  backgroundId: string // references BACKGROUND_GALLERY
-  backgroundImageUrl?: string // custom image URL overrides gallery background
+  backgroundId: string
+  backgroundImageUrl?: string
 }
 
 export type HeroMediaType = "video" | "image"
 
 export interface EventConfig {
+  id: string // URL slug, unique identifier
   name: string
   date: string
   location: string
@@ -36,6 +37,7 @@ export interface EventConfig {
   heroMediaType: HeroMediaType
   fontFamily: FontFamily
   pages: EventPage[]
+  createdAt: string
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -76,90 +78,82 @@ export const FONT_OPTIONS: { id: FontFamily; label: string; cssFamily: string }[
   { id: "crimson-pro", label: "Crimson Pro", cssFamily: "'Crimson Pro', serif" },
 ]
 
+// ---- Slug generation ----
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "")
+    .slice(0, 60)
+}
+
 // ---- Default Event Configuration ----
-const defaultEventConfig: EventConfig = {
-  name: "Annual Gathering 2026",
-  date: "Saturday, April 18th, 2026",
-  location: "The Grand Hall, 123 Event Street",
-  description: "Join us for an evening of celebration, great food, and wonderful company. An unforgettable night awaits.",
-  heroMediaUrl: "https://videos.pexels.com/video-files/3571264/3571264-uhd_2560_1440_30fps.mp4",
-  heroMediaType: "video",
-  fontFamily: "playfair",
-  pages: [
-    {
-      id: "page-1",
-      title: "Your Name",
-      subtitle: "Let us know who you are",
-      questions: [{
-        id: "q-name",
-        type: "text",
-        label: "What is your full name?",
-        required: true,
-      }],
-      backgroundId: "gradient-champagne",
-    },
-    {
-      id: "page-2",
-      title: "Your Attendance",
-      subtitle: "Will you be joining us?",
-      questions: [{
-        id: "q-attendance",
-        type: "yes-no",
-        label: "Will you attend the event?",
-        required: true,
-      }],
-      backgroundId: "gradient-forest",
-    },
-    {
-      id: "page-3",
-      title: "Dietary Preference",
-      subtitle: "Help us prepare for you",
-      questions: [{
-        id: "q-dietary",
-        type: "single-choice",
-        label: "Do you have any dietary preferences?",
-        options: ["No Preference", "Vegetarian", "Vegan", "Gluten-Free", "Halal", "Kosher"],
-        required: true,
-      }],
-      backgroundId: "gradient-rose",
-    },
-    {
-      id: "page-4",
-      title: "Plus Ones",
-      subtitle: "Bringing anyone along?",
-      questions: [{
-        id: "q-guests",
-        type: "guest-count",
-        label: "How many additional guests are coming with you?",
-        required: false,
-      }],
-      backgroundId: "gradient-ocean",
-    },
-    {
-      id: "page-5",
-      title: "Special Requests",
-      subtitle: "Anything else we should know?",
-      questions: [{
-        id: "q-notes",
-        type: "text",
-        label: "Any special requests or notes?",
-        required: false,
-      }],
-      backgroundId: "gradient-midnight",
-    },
-  ],
+function createDefaultEvent(): EventConfig {
+  return {
+    id: "annual-gathering-2026",
+    name: "Annual Gathering 2026",
+    date: "Saturday, April 18th, 2026",
+    location: "The Grand Hall, 123 Event Street",
+    description: "Join us for an evening of celebration, great food, and wonderful company. An unforgettable night awaits.",
+    heroMediaUrl: "https://videos.pexels.com/video-files/3571264/3571264-uhd_2560_1440_30fps.mp4",
+    heroMediaType: "video",
+    fontFamily: "playfair",
+    createdAt: new Date().toISOString(),
+    pages: [
+      {
+        id: "page-1",
+        title: "Your Name",
+        subtitle: "Let us know who you are",
+        questions: [{ id: "q-name", type: "text", label: "What is your full name?", required: true }],
+        backgroundId: "gradient-champagne",
+      },
+      {
+        id: "page-2",
+        title: "Your Attendance",
+        subtitle: "Will you be joining us?",
+        questions: [{ id: "q-attendance", type: "yes-no", label: "Will you attend the event?", required: true }],
+        backgroundId: "gradient-forest",
+      },
+      {
+        id: "page-3",
+        title: "Dietary Preference",
+        subtitle: "Help us prepare for you",
+        questions: [{ id: "q-dietary", type: "single-choice", label: "Do you have any dietary preferences?", options: ["No Preference", "Vegetarian", "Vegan", "Gluten-Free", "Halal", "Kosher"], required: true }],
+        backgroundId: "gradient-rose",
+      },
+      {
+        id: "page-4",
+        title: "Plus Ones",
+        subtitle: "Bringing anyone along?",
+        questions: [{ id: "q-guests", type: "guest-count", label: "How many additional guests are coming with you?", required: false }],
+        backgroundId: "gradient-ocean",
+      },
+      {
+        id: "page-5",
+        title: "Special Requests",
+        subtitle: "Anything else we should know?",
+        questions: [{ id: "q-notes", type: "text", label: "Any special requests or notes?", required: false }],
+        backgroundId: "gradient-midnight",
+      },
+    ],
+  }
 }
 
 // ---- In-memory stores ----
-const guestStore = new Map<string, Guest>()
-let eventConfig: EventConfig = JSON.parse(JSON.stringify(defaultEventConfig))
+// Map<eventId, EventConfig>
+const eventStore = new Map<string, EventConfig>()
+// Map<eventId, Map<phone, Guest>>
+const guestStoreByEvent = new Map<string, Map<string, Guest>>()
+
+// Seed the default event
+const defaultEvent = createDefaultEvent()
+eventStore.set(defaultEvent.id, defaultEvent)
+guestStoreByEvent.set(defaultEvent.id, new Map())
 
 // Secret used for simple HMAC-like session tokens
 const SESSION_SECRET = "event-rsvp-demo-secret-2026"
 
 // ---- OTP functions ----
-// Deterministic demo code based on phone number
-// In production, replace with real SMS + random code stored in a database
 function getDemoCode(phone: string): string {
   let hash = 0
   for (let i = 0; i < phone.length; i++) {
@@ -177,7 +171,7 @@ export function verifyOTP(phone: string, code: string): boolean {
 }
 
 // ---- Session functions (stateless, encoded tokens) ----
-// Token format: base64(phone + "." + simpleHash(phone + secret))
+// Token format: base64url(eventId:phone.sig)
 function simpleHash(str: string): string {
   let h = 0
   for (let i = 0; i < str.length; i++) {
@@ -186,28 +180,109 @@ function simpleHash(str: string): string {
   return Math.abs(h).toString(36)
 }
 
-export function createSession(phone: string): string {
-  const sig = simpleHash(phone + SESSION_SECRET)
-  const payload = phone + "." + sig
+export function createSession(eventId: string, phone: string): string {
+  const data = `${eventId}:${phone}`
+  const sig = simpleHash(data + SESSION_SECRET)
+  const payload = `${data}.${sig}`
   return Buffer.from(payload).toString("base64url")
 }
 
-export function getSessionPhone(sessionToken: string): string | null {
+export function getSessionData(sessionToken: string): { eventId: string; phone: string } | null {
   try {
     const payload = Buffer.from(sessionToken, "base64url").toString()
     const dotIndex = payload.lastIndexOf(".")
     if (dotIndex === -1) return null
-    const phone = payload.slice(0, dotIndex)
+    const data = payload.slice(0, dotIndex)
     const sig = payload.slice(dotIndex + 1)
-    if (sig !== simpleHash(phone + SESSION_SECRET)) return null
-    return phone
+    if (sig !== simpleHash(data + SESSION_SECRET)) return null
+    const colonIndex = data.indexOf(":")
+    if (colonIndex === -1) return null
+    return {
+      eventId: data.slice(0, colonIndex),
+      phone: data.slice(colonIndex + 1),
+    }
   } catch {
     return null
   }
 }
 
-// ---- Guest functions ----
+// ---- Event CRUD functions ----
+export function getAllEvents(): EventConfig[] {
+  return Array.from(eventStore.values()).sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  )
+}
+
+export function getEventConfig(eventId: string): EventConfig | null {
+  return eventStore.get(eventId) ?? null
+}
+
+export function createEvent(name: string): EventConfig {
+  let slug = slugify(name)
+  // Ensure unique slug
+  let counter = 1
+  while (eventStore.has(slug)) {
+    slug = `${slugify(name)}-${counter++}`
+  }
+  const event: EventConfig = {
+    id: slug,
+    name,
+    date: "TBD",
+    location: "TBD",
+    description: "Event description here.",
+    heroMediaUrl: "https://images.unsplash.com/photo-1519167758481-83f550bb49b3?w=1920&q=80",
+    heroMediaType: "image",
+    fontFamily: "playfair",
+    createdAt: new Date().toISOString(),
+    pages: [
+      {
+        id: "page-1",
+        title: "Your Name",
+        subtitle: "Let us know who you are",
+        questions: [{ id: "q-name", type: "text", label: "What is your full name?", required: true }],
+        backgroundId: "gradient-champagne",
+      },
+      {
+        id: "page-2",
+        title: "Your Attendance",
+        subtitle: "Will you be joining us?",
+        questions: [{ id: "q-attendance", type: "yes-no", label: "Will you attend the event?", required: true }],
+        backgroundId: "gradient-forest",
+      },
+    ],
+  }
+  eventStore.set(slug, event)
+  guestStoreByEvent.set(slug, new Map())
+  return event
+}
+
+export function deleteEvent(eventId: string): boolean {
+  if (!eventStore.has(eventId)) return false
+  eventStore.delete(eventId)
+  guestStoreByEvent.delete(eventId)
+  return true
+}
+
+export function updateEventConfig(eventId: string, updates: Partial<EventConfig>): EventConfig | null {
+  const existing = eventStore.get(eventId)
+  if (!existing) return null
+  const updated = { ...existing, ...updates, id: existing.id } // prevent overwriting id
+  eventStore.set(eventId, updated)
+  return updated
+}
+
+// ---- Guest functions (scoped by event) ----
+function getEventGuests(eventId: string): Map<string, Guest> {
+  let guests = guestStoreByEvent.get(eventId)
+  if (!guests) {
+    guests = new Map()
+    guestStoreByEvent.set(eventId, guests)
+  }
+  return guests
+}
+
 export function saveGuestResponse(
+  eventId: string,
   phone: string,
   responses: Record<string, ResponseValue>
 ): Guest {
@@ -220,30 +295,20 @@ export function saveGuestResponse(
     responses,
     submittedAt: new Date().toISOString(),
   }
-  guestStore.set(phone, guest)
+  getEventGuests(eventId).set(phone, guest)
   return guest
 }
 
-export function getGuestByPhone(phone: string): Guest | null {
-  return guestStore.get(phone) ?? null
+export function getGuestByPhone(eventId: string, phone: string): Guest | null {
+  return getEventGuests(eventId).get(phone) ?? null
 }
 
-export function getAllGuests(): Guest[] {
-  return Array.from(guestStore.values())
+export function getAllGuests(eventId: string): Guest[] {
+  return Array.from(getEventGuests(eventId).values())
 }
 
-export function hasGuestResponded(phone: string): boolean {
-  return guestStore.has(phone)
-}
-
-// ---- Event config functions ----
-export function getEventConfig(): EventConfig {
-  return eventConfig
-}
-
-export function updateEventConfig(updates: Partial<EventConfig>): EventConfig {
-  eventConfig = { ...eventConfig, ...updates }
-  return eventConfig
+export function hasGuestResponded(eventId: string, phone: string): boolean {
+  return getEventGuests(eventId).has(phone)
 }
 
 export function getBackgroundById(id: string) {

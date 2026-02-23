@@ -36,23 +36,66 @@ import {
   Save,
   Check,
   X,
+  Calendar,
+  MapPin,
+  ExternalLink,
+  Copy,
 } from "lucide-react"
 import type { Guest, EventPage, EventConfig, QuestionType, FontFamily, HeroMediaType } from "@/lib/store"
 import { BACKGROUND_GALLERY, FONT_OPTIONS } from "@/lib/store"
 import { getFontStyle } from "@/lib/fonts"
 
+interface EventSummary {
+  id: string
+  name: string
+  date: string
+  location: string
+  createdAt: string
+}
+
 export function AdminDashboard() {
+  // Event selector state
+  const [events, setEvents] = useState<EventSummary[]>([])
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
+  const [loadingEvents, setLoadingEvents] = useState(true)
+  const [creatingEvent, setCreatingEvent] = useState(false)
+  const [newEventName, setNewEventName] = useState("")
+  const [showCreateForm, setShowCreateForm] = useState(false)
+  const [deletingEventId, setDeletingEventId] = useState<string | null>(null)
+
+  // Per-event data state
   const [config, setConfig] = useState<EventConfig | null>(null)
   const [guests, setGuests] = useState<Guest[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loadingData, setLoadingData] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [copiedLink, setCopiedLink] = useState(false)
 
-  const fetchData = useCallback(async () => {
+  // Fetch all events for the selector
+  const fetchEvents = useCallback(async (autoSelect?: boolean) => {
+    try {
+      const res = await fetch("/api/events")
+      if (res.ok) {
+        const data = await res.json()
+        setEvents(data.events)
+        if (autoSelect && data.events.length > 0) {
+          setSelectedEventId(data.events[0].id)
+        }
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setLoadingEvents(false)
+    }
+  }, [])
+
+  // Fetch data for selected event
+  const fetchEventData = useCallback(async (eventId: string) => {
+    setLoadingData(true)
     try {
       const [configRes, guestsRes] = await Promise.all([
-        fetch("/api/event-config"),
-        fetch("/api/admin/guests"),
+        fetch(`/api/event-config?eventId=${eventId}`),
+        fetch(`/api/admin/guests?eventId=${eventId}`),
       ])
       if (configRes.ok) {
         const configData = await configRes.json()
@@ -65,20 +108,26 @@ export function AdminDashboard() {
     } catch {
       // silently fail
     } finally {
-      setLoading(false)
+      setLoadingData(false)
     }
   }, [])
 
   useEffect(() => {
-    fetchData()
-  }, [fetchData])
+    fetchEvents(true)
+  }, [fetchEvents])
+
+  useEffect(() => {
+    if (selectedEventId) {
+      fetchEventData(selectedEventId)
+    }
+  }, [selectedEventId, fetchEventData])
 
   const saveConfig = useCallback(async () => {
-    if (!config) return
+    if (!config || !selectedEventId) return
     setSaving(true)
     setSaved(false)
     try {
-      const res = await fetch("/api/event-config", {
+      const res = await fetch(`/api/event-config?eventId=${selectedEventId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(config),
@@ -86,15 +135,75 @@ export function AdminDashboard() {
       if (res.ok) {
         setSaved(true)
         setTimeout(() => setSaved(false), 2000)
+        // Refresh events list to reflect name/date changes
+        fetchEvents()
       }
     } catch {
       // silently fail
     } finally {
       setSaving(false)
     }
-  }, [config])
+  }, [config, selectedEventId, fetchEvents])
 
-  if (loading || !config) {
+  const handleCreateEvent = useCallback(async () => {
+    if (!newEventName.trim()) return
+    setCreatingEvent(true)
+    try {
+      const res = await fetch("/api/events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newEventName.trim() }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setNewEventName("")
+        setShowCreateForm(false)
+        // Refresh and select the new event
+        const eventsRes = await fetch("/api/events")
+        if (eventsRes.ok) {
+          const eventsData = await eventsRes.json()
+          setEvents(eventsData.events)
+        }
+        setSelectedEventId(data.event.id)
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setCreatingEvent(false)
+    }
+  }, [newEventName])
+
+  const handleDeleteEvent = useCallback(async (eventId: string) => {
+    setDeletingEventId(eventId)
+    try {
+      const res = await fetch(`/api/events?eventId=${eventId}`, { method: "DELETE" })
+      if (res.ok) {
+        const remaining = events.filter((e) => e.id !== eventId)
+        setEvents(remaining)
+        if (selectedEventId === eventId) {
+          setSelectedEventId(remaining.length > 0 ? remaining[0].id : null)
+          if (remaining.length === 0) {
+            setConfig(null)
+            setGuests([])
+          }
+        }
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setDeletingEventId(null)
+    }
+  }, [events, selectedEventId])
+
+  const copyEventLink = useCallback(() => {
+    if (!selectedEventId) return
+    const url = `${window.location.origin}/event/${selectedEventId}`
+    navigator.clipboard.writeText(url)
+    setCopiedLink(true)
+    setTimeout(() => setCopiedLink(false), 2000)
+  }, [selectedEventId])
+
+  if (loadingEvents) {
     return (
       <div className="flex min-h-[400px] items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -103,47 +212,184 @@ export function AdminDashboard() {
   }
 
   return (
-    <Tabs defaultValue="settings" className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <TabsList>
-          <TabsTrigger value="settings" className="gap-1.5">
-            <Settings className="h-4 w-4" />
-            Event Settings
-          </TabsTrigger>
-          <TabsTrigger value="pages" className="gap-1.5">
-            <Layout className="h-4 w-4" />
-            Page Builder
-          </TabsTrigger>
-          <TabsTrigger value="responses" className="gap-1.5">
-            <ClipboardList className="h-4 w-4" />
-            Responses
-          </TabsTrigger>
-        </TabsList>
-
-        <Button onClick={saveConfig} disabled={saving} size="sm" className="gap-1.5">
-          {saving ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : saved ? (
-            <Check className="h-4 w-4" />
-          ) : (
-            <Save className="h-4 w-4" />
+    <div className="flex flex-col gap-6">
+      {/* Event Selector */}
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-medium text-muted-foreground">Your Events</h2>
+          {!showCreateForm && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowCreateForm(true)}
+              className="gap-1.5"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              New Event
+            </Button>
           )}
-          {saved ? "Saved" : "Save Changes"}
-        </Button>
+        </div>
+
+        {/* Create form */}
+        {showCreateForm && (
+          <Card className="border-dashed border-primary/30">
+            <CardContent className="flex items-center gap-3 py-3">
+              <Input
+                value={newEventName}
+                onChange={(e) => setNewEventName(e.target.value)}
+                placeholder="Event name, e.g. Summer BBQ 2026"
+                className="flex-1"
+                autoFocus
+                onKeyDown={(e) => e.key === "Enter" && handleCreateEvent()}
+              />
+              <Button
+                size="sm"
+                onClick={handleCreateEvent}
+                disabled={creatingEvent || !newEventName.trim()}
+                className="gap-1.5"
+              >
+                {creatingEvent ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                Create
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => { setShowCreateForm(false); setNewEventName("") }}
+              >
+                Cancel
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Event cards */}
+        <div className="flex gap-3 overflow-x-auto pb-1">
+          {events.map((event) => {
+            const isSelected = event.id === selectedEventId
+            const isDeleting = event.id === deletingEventId
+            return (
+              <button
+                key={event.id}
+                type="button"
+                onClick={() => setSelectedEventId(event.id)}
+                disabled={isDeleting}
+                className={`group relative flex min-w-[200px] max-w-[280px] shrink-0 flex-col gap-1.5 rounded-xl border-2 px-4 py-3 text-left transition-all ${
+                  isSelected
+                    ? "border-primary bg-primary/5 shadow-sm"
+                    : "border-border bg-card hover:border-primary/30"
+                } ${isDeleting ? "opacity-50" : ""}`}
+              >
+                <span className="truncate text-sm font-medium text-foreground">{event.name}</span>
+                <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1 truncate">
+                    <Calendar className="h-3 w-3 shrink-0" />
+                    {event.date}
+                  </span>
+                </div>
+                {/* Delete button on hover */}
+                {events.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); handleDeleteEvent(event.id) }}
+                    className="absolute top-2 right-2 hidden rounded-md p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive group-hover:flex"
+                    aria-label={`Delete ${event.name}`}
+                  >
+                    {isDeleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                  </button>
+                )}
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Event link bar */}
+        {selectedEventId && (
+          <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2">
+            <span className="truncate text-xs text-muted-foreground font-mono">
+              {typeof window !== "undefined" ? window.location.origin : ""}/event/{selectedEventId}
+            </span>
+            <Button variant="ghost" size="sm" className="ml-auto h-7 gap-1.5 shrink-0 text-xs" onClick={copyEventLink}>
+              {copiedLink ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+              {copiedLink ? "Copied" : "Copy"}
+            </Button>
+            <a
+              href={`/event/${selectedEventId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex h-7 items-center gap-1 rounded-md px-2 text-xs text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <ExternalLink className="h-3 w-3" />
+              Preview
+            </a>
+          </div>
+        )}
       </div>
 
-      <TabsContent value="settings">
-        <EventSettingsTab config={config} setConfig={setConfig} />
-      </TabsContent>
+      {/* No events state */}
+      {events.length === 0 && !showCreateForm && (
+        <Card className="border-dashed">
+          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+            <Calendar className="h-8 w-8 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">No events yet. Create your first event to get started.</p>
+            <Button onClick={() => setShowCreateForm(true)} size="sm" className="gap-1.5">
+              <Plus className="h-4 w-4" />
+              Create Event
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
-      <TabsContent value="pages">
-        <PageBuilderTab config={config} setConfig={setConfig} />
-      </TabsContent>
+      {/* Event dashboard tabs */}
+      {selectedEventId && config && !loadingData && (
+        <Tabs defaultValue="settings" className="flex flex-col gap-6">
+          <div className="flex items-center justify-between">
+            <TabsList>
+              <TabsTrigger value="settings" className="gap-1.5">
+                <Settings className="h-4 w-4" />
+                Event Settings
+              </TabsTrigger>
+              <TabsTrigger value="pages" className="gap-1.5">
+                <Layout className="h-4 w-4" />
+                Page Builder
+              </TabsTrigger>
+              <TabsTrigger value="responses" className="gap-1.5">
+                <ClipboardList className="h-4 w-4" />
+                Responses
+              </TabsTrigger>
+            </TabsList>
 
-      <TabsContent value="responses">
-        <ResponsesTab guests={guests} pages={config.pages} onRefresh={fetchData} />
-      </TabsContent>
-    </Tabs>
+            <Button onClick={saveConfig} disabled={saving} size="sm" className="gap-1.5">
+              {saving ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : saved ? (
+                <Check className="h-4 w-4" />
+              ) : (
+                <Save className="h-4 w-4" />
+              )}
+              {saved ? "Saved" : "Save Changes"}
+            </Button>
+          </div>
+
+          <TabsContent value="settings">
+            <EventSettingsTab config={config} setConfig={setConfig} />
+          </TabsContent>
+
+          <TabsContent value="pages">
+            <PageBuilderTab config={config} setConfig={setConfig} />
+          </TabsContent>
+
+          <TabsContent value="responses">
+            <ResponsesTab guests={guests} pages={config.pages} onRefresh={() => fetchEventData(selectedEventId!)} />
+          </TabsContent>
+        </Tabs>
+      )}
+
+      {selectedEventId && loadingData && (
+        <div className="flex min-h-[300px] items-center justify-center">
+          <Loader2 className="h-6 w-6 animate-spin text-primary" />
+        </div>
+      )}
+    </div>
   )
 }
 

@@ -11,6 +11,7 @@ import { getBackgroundStyle } from "@/lib/backgrounds"
 type ResponseValue = string | string[] | number | boolean | GuestCountValue
 
 interface RsvpFlowProps {
+  eventId: string
   pages: EventPage[]
   fontClass: string
   eventName: string
@@ -18,7 +19,7 @@ interface RsvpFlowProps {
 
 type FlowStep = "phone" | "otp" | "questions" | "complete"
 
-export function RsvpFlow({ pages, fontClass, eventName }: RsvpFlowProps) {
+export function RsvpFlow({ eventId, pages, fontClass, eventName }: RsvpFlowProps) {
   const [step, setStep] = useState<FlowStep>("phone")
   const [phone, setPhone] = useState("")
   const [otp, setOtp] = useState("")
@@ -39,7 +40,7 @@ export function RsvpFlow({ pages, fontClass, eventName }: RsvpFlowProps) {
       const res = await fetch("/api/auth/send-code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone }),
+        body: JSON.stringify({ phone, eventId }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -64,7 +65,7 @@ export function RsvpFlow({ pages, fontClass, eventName }: RsvpFlowProps) {
       const res = await fetch("/api/auth/verify-code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, code: codeToVerify }),
+        body: JSON.stringify({ phone, code: codeToVerify, eventId }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -321,7 +322,7 @@ export function RsvpFlow({ pages, fontClass, eventName }: RsvpFlowProps) {
                 Your response has been recorded. We look forward to seeing you at the event.
               </p>
               <a
-                href="/"
+                href={`/event/${eventId}`}
                 className="mt-4 inline-flex items-center justify-center rounded-2xl border-2 border-white/20 bg-white/10 px-8 py-4 text-lg font-medium text-white backdrop-blur-sm transition-all hover:bg-white/20"
               >
                 Back to Event

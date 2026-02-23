@@ -7,6 +7,7 @@ import { ChevronDown } from "lucide-react"
 import type { HeroMediaType } from "@/lib/store"
 
 interface VideoHeroProps {
+  eventId: string
   eventName: string
   eventDate: string
   eventLocation: string
@@ -17,6 +18,7 @@ interface VideoHeroProps {
 }
 
 export function VideoHero({
+  eventId,
   eventName,
   eventDate,
   eventLocation,
@@ -87,7 +89,7 @@ export function VideoHero({
         </p>
 
         <Link
-          href="/rsvp"
+          href={`/event/${eventId}/rsvp`}
           className="mt-4 inline-flex items-center justify-center rounded-full bg-white px-10 py-4 text-lg font-semibold text-black transition-all hover:bg-white/90 hover:scale-105 active:scale-95"
         >
           RSVP Now
