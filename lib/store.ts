@@ -166,6 +166,7 @@ export function generateOTP(phone: string): string {
 
 export function verifyOTP(phone: string, code: string): boolean {
   const entry = otpStore.get(phone)
+  console.log("[v0] verifyOTP: phone=", phone, "code=", code, "entry=", entry ? { code: entry.code, expiresAt: entry.expiresAt, now: Date.now() } : "NOT FOUND", "otpStoreKeys=", Array.from(otpStore.keys()))
   if (!entry) return false
   if (Date.now() > entry.expiresAt) {
     otpStore.delete(phone)

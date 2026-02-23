@@ -10,7 +10,9 @@ export async function POST(request: Request) {
     }
 
     const digits = phone.replace(/\D/g, "")
+    console.log("[v0] verify-code: phone=", phone, "digits=", digits, "code=", code, "type=", typeof code)
     const isValid = verifyOTP(digits, code)
+    console.log("[v0] verify-code: isValid=", isValid)
 
     if (!isValid) {
       return NextResponse.json({ error: "Invalid or expired code" }, { status: 401 })
