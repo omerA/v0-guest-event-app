@@ -3,8 +3,8 @@ import { Sparkles, ArrowLeft } from "lucide-react"
 import Link from "next/link"
 
 export const metadata = {
-  title: "Admin - Event Responses",
-  description: "View and manage guest RSVP responses",
+  title: "Admin - Event Dashboard",
+  description: "Manage your event, design questions, and view guest responses",
 }
 
 export default function AdminPage() {
@@ -16,13 +16,13 @@ export default function AdminPage() {
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
               <Sparkles className="h-4 w-4 text-primary-foreground" />
             </div>
-            <span className="text-lg font-semibold text-foreground tracking-tight">
+            <span className="text-lg font-semibold tracking-tight text-foreground">
               Event Dashboard
             </span>
           </div>
           <Link
             href="/"
-            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            className="flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
           >
             <ArrowLeft className="h-4 w-4" />
             Guest view
