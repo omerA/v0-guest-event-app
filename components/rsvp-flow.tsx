@@ -87,13 +87,15 @@ export function RsvpFlow({ pages, fontClass, eventName }: RsvpFlowProps) {
     setLoading(true)
     setError("")
     try {
+      console.log("[v0] Submitting responses:", responses)
       const res = await fetch("/api/responses", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ responses }),
       })
+      const data = await res.json()
+      console.log("[v0] Submit response:", res.status, data)
       if (!res.ok) {
-        const data = await res.json()
         setError(data.error || "Failed to submit")
         return
       }
@@ -245,7 +247,7 @@ export function RsvpFlow({ pages, fontClass, eventName }: RsvpFlowProps) {
                 </InputOTP>
                 {error && <p className="text-center text-sm text-red-300">{error}</p>}
                 <button
-                  onClick={handleVerifyCode}
+                  onClick={() => handleVerifyCode()}
                   disabled={loading || otp.length < 6}
                   className="flex min-h-[56px] w-full max-w-sm items-center justify-center gap-2 rounded-2xl bg-white px-8 py-4 text-lg font-semibold text-black transition-all hover:bg-white/90 active:scale-[0.97] disabled:opacity-50"
                 >
