@@ -1,7 +1,8 @@
 "use client"
 
 import { useState, useCallback } from "react"
-import { ArrowLeft, ArrowRight, Send, Check, Loader2 } from "lucide-react"
+import { ArrowLeft, ArrowRight, Send, Check, Loader2, CalendarPlus, Download } from "lucide-react"
+import { googleCalendarUrl, outlookCalendarUrl, generateICSContent, formatEventDate } from "@/lib/date-utils"
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp"
 import { QuestionRenderer } from "@/components/question-renderers"
 import type { GuestCountValue } from "@/components/question-renderers"
@@ -15,11 +16,14 @@ interface RsvpFlowProps {
   pages: EventPage[]
   fontClass: string
   eventName: string
+  eventDate: string
+  eventLocation: string
+  eventDescription: string
 }
 
 type FlowStep = "phone" | "otp" | "questions" | "complete"
 
-export function RsvpFlow({ eventId, pages, fontClass, eventName }: RsvpFlowProps) {
+export function RsvpFlow({ eventId, pages, fontClass, eventName, eventDate, eventLocation, eventDescription }: RsvpFlowProps) {
   const [step, setStep] = useState<FlowStep>("phone")
   const [phone, setPhone] = useState("")
   const [otp, setOtp] = useState("")
@@ -321,9 +325,57 @@ export function RsvpFlow({ eventId, pages, fontClass, eventName }: RsvpFlowProps
               <p className="max-w-sm text-base leading-relaxed text-white/70">
                 Your response has been recorded. We look forward to seeing you at the event.
               </p>
+
+              {/* Calendar export */}
+              {eventDate && (
+                <div className="flex flex-col items-center gap-3 w-full max-w-sm">
+                  <p className="text-xs tracking-[0.15em] font-medium text-white/40 uppercase">
+                    Add to your calendar
+                  </p>
+                  <div className="flex w-full flex-col gap-2">
+                    <a
+                      href={googleCalendarUrl({ title: eventName, date: eventDate, location: eventLocation, description: eventDescription })}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-medium text-white/80 backdrop-blur-sm transition-all hover:bg-white/10 hover:text-white"
+                    >
+                      <CalendarPlus className="h-4 w-4" />
+                      Google Calendar
+                    </a>
+                    <a
+                      href={outlookCalendarUrl({ title: eventName, date: eventDate, location: eventLocation, description: eventDescription })}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-medium text-white/80 backdrop-blur-sm transition-all hover:bg-white/10 hover:text-white"
+                    >
+                      <CalendarPlus className="h-4 w-4" />
+                      Outlook Calendar
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const ics = generateICSContent({ title: eventName, date: eventDate, location: eventLocation, description: eventDescription })
+                        if (!ics) return
+                        const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" })
+                        const url = URL.createObjectURL(blob)
+                        const a = document.createElement("a")
+                        a.href = url
+                        a.download = `${eventName.replace(/\s+/g, "-").toLowerCase()}.ics`
+                        a.click()
+                        URL.revokeObjectURL(url)
+                      }}
+                      className="flex items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-medium text-white/80 backdrop-blur-sm transition-all hover:bg-white/10 hover:text-white"
+                    >
+                      <Download className="h-4 w-4" />
+                      Apple Calendar (.ics)
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <a
                 href={`/event/${eventId}`}
-                className="mt-4 inline-flex items-center justify-center rounded-2xl border-2 border-white/20 bg-white/10 px-8 py-4 text-lg font-medium text-white backdrop-blur-sm transition-all hover:bg-white/20"
+                className="mt-2 inline-flex items-center justify-center rounded-2xl border-2 border-white/20 bg-white/10 px-8 py-4 text-lg font-medium text-white backdrop-blur-sm transition-all hover:bg-white/20"
               >
                 Back to Event
               </a>

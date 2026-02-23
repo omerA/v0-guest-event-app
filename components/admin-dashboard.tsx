@@ -41,9 +41,13 @@ import {
   ExternalLink,
   Copy,
 } from "lucide-react"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Calendar as CalendarWidget } from "@/components/ui/calendar"
 import type { Guest, EventPage, EventConfig, QuestionType, FontFamily, HeroMediaType } from "@/lib/store"
 import { BACKGROUND_GALLERY, FONT_OPTIONS } from "@/lib/store"
 import { getFontStyle } from "@/lib/fonts"
+import { formatEventDateShort } from "@/lib/date-utils"
+import { parseISO, isValid, format } from "date-fns"
 
 interface EventSummary {
   id: string
@@ -283,7 +287,7 @@ export function AdminDashboard() {
                 <div className="flex items-center gap-3 text-xs text-muted-foreground">
                   <span className="flex items-center gap-1 truncate">
                     <Calendar className="h-3 w-3 shrink-0" />
-                    {event.date}
+                    {formatEventDateShort(event.date)}
                   </span>
                 </div>
                 {/* Delete button on hover */}
@@ -393,6 +397,76 @@ export function AdminDashboard() {
   )
 }
 
+// ---- Date Time Picker ----
+function DateTimePicker({
+  value,
+  onChange,
+}: {
+  value: string
+  onChange: (iso: string) => void
+}) {
+  const date = value ? parseISO(value) : undefined
+  const isDateValid = date && isValid(date)
+
+  const timeValue = isDateValid ? format(date, "HH:mm") : "19:00"
+
+  function handleDateSelect(newDate: Date | undefined) {
+    if (!newDate) return
+    // Preserve the time from current value or default to 19:00
+    const [hours, minutes] = timeValue.split(":").map(Number)
+    newDate.setHours(hours, minutes, 0, 0)
+    onChange(newDate.toISOString())
+  }
+
+  function handleTimeChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const [hours, minutes] = e.target.value.split(":").map(Number)
+    if (isDateValid) {
+      const updated = new Date(date)
+      updated.setHours(hours, minutes, 0, 0)
+      onChange(updated.toISOString())
+    } else {
+      // Set a default date with this time
+      const now = new Date()
+      now.setHours(hours, minutes, 0, 0)
+      onChange(now.toISOString())
+    }
+  }
+
+  return (
+    <div className="flex gap-2">
+      <Popover>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className={`flex h-9 flex-1 items-center gap-2 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs transition-colors hover:bg-accent ${
+              isDateValid ? "text-foreground" : "text-muted-foreground"
+            }`}
+          >
+            <Calendar className="h-4 w-4 shrink-0 text-muted-foreground" />
+            {isDateValid ? format(date, "EEEE, MMMM d, yyyy") : "Pick a date"}
+          </button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="start">
+          <CalendarWidget
+            mode="single"
+            selected={isDateValid ? date : undefined}
+            onSelect={handleDateSelect}
+            initialFocus
+          />
+        </PopoverContent>
+      </Popover>
+      <div className="flex items-center gap-1.5">
+        <input
+          type="time"
+          value={timeValue}
+          onChange={handleTimeChange}
+          className="h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs transition-colors focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none"
+        />
+      </div>
+    </div>
+  )
+}
+
 // ---- Event Settings Tab ----
 function EventSettingsTab({
   config,
@@ -422,14 +496,12 @@ function EventSettingsTab({
               placeholder="Annual Gathering 2026"
             />
           </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="event-date">Date</Label>
-              <Input
-                id="event-date"
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className="flex flex-col gap-2 sm:col-span-2">
+              <Label>Date & Time</Label>
+              <DateTimePicker
                 value={config.date}
-                onChange={(e) => update("date", e.target.value)}
-                placeholder="Saturday, April 18th, 2026"
+                onChange={(val) => update("date", val)}
               />
             </div>
             <div className="flex flex-col gap-2">

@@ -5,6 +5,7 @@ import Link from "next/link"
 import { ChevronDown } from "lucide-react"
 
 import type { HeroMediaType } from "@/lib/store"
+import { formatEventDate, formatEventTime, getCountdown } from "@/lib/date-utils"
 
 interface VideoHeroProps {
   eventId: string
@@ -79,10 +80,34 @@ export function VideoHero({
         </h1>
 
         <div className="flex flex-col items-center gap-1 text-lg text-white/80">
-          <span>{eventDate}</span>
+          <span>{formatEventDate(eventDate)}</span>
           <span className="text-white/50">|</span>
           <span>{eventLocation}</span>
         </div>
+
+        {/* Countdown */}
+        {(() => {
+          const countdown = getCountdown(eventDate)
+          if (!countdown || countdown.isPast) return null
+          return (
+            <div className="flex items-center gap-4">
+              {[
+                { value: countdown.days, label: "Days" },
+                { value: countdown.hours, label: "Hours" },
+                { value: countdown.minutes, label: "Min" },
+              ].map((unit) => (
+                <div key={unit.label} className="flex flex-col items-center gap-0.5">
+                  <span className="text-3xl font-bold tabular-nums text-white sm:text-4xl">
+                    {String(unit.value).padStart(2, "0")}
+                  </span>
+                  <span className="text-[10px] tracking-[0.2em] font-medium text-white/40 uppercase">
+                    {unit.label}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )
+        })()}
 
         <p className="max-w-md text-base leading-relaxed text-white/65 text-pretty">
           {eventDescription}

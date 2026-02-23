@@ -1,5 +1,8 @@
+"use client"
+
 import Link from "next/link"
-import { CalendarDays, MapPin, Clock, Users } from "lucide-react"
+import { CalendarDays, MapPin, Clock, Users, Navigation, ExternalLink } from "lucide-react"
+import { formatEventDate, formatEventTime, googleMapsUrl, wazeUrl, appleMapsUrl } from "@/lib/date-utils"
 
 interface EventDetailsProps {
   eventId: string
@@ -36,17 +39,28 @@ export function EventDetails({
           <DetailCard
             icon={<CalendarDays className="h-6 w-6" />}
             title="Date"
-            value={eventDate}
+            value={formatEventDate(eventDate)}
           />
-          <DetailCard
-            icon={<MapPin className="h-6 w-6" />}
-            title="Venue"
-            value={eventLocation}
-          />
+          {/* Venue card with map links */}
+          <div className="flex flex-col items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-6 py-8 backdrop-blur-sm">
+            <div className="text-white/40">
+              <MapPin className="h-6 w-6" />
+            </div>
+            <p className="text-xs tracking-[0.2em] font-medium text-white/35 uppercase">Venue</p>
+            <p className="text-lg font-medium text-white/90">{eventLocation}</p>
+            {/* Map links */}
+            <div className="flex items-center gap-2 pt-1">
+              <MapLink href={googleMapsUrl(eventLocation)} label="Google Maps" />
+              <span className="text-white/20">|</span>
+              <MapLink href={wazeUrl(eventLocation)} label="Waze" />
+              <span className="text-white/20">|</span>
+              <MapLink href={appleMapsUrl(eventLocation)} label="Apple Maps" />
+            </div>
+          </div>
           <DetailCard
             icon={<Clock className="h-6 w-6" />}
             title="Time"
-            value="7:00 PM onwards"
+            value={formatEventTime(eventDate)}
           />
           <DetailCard
             icon={<Users className="h-6 w-6" />}
@@ -85,5 +99,19 @@ function DetailCard({
       <p className="text-xs tracking-[0.2em] font-medium text-white/35 uppercase">{title}</p>
       <p className="text-lg font-medium text-white/90">{value}</p>
     </div>
+  )
+}
+
+function MapLink({ href, label }: { href: string; label: string }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex items-center gap-1 text-xs text-white/40 transition-colors hover:text-white/70"
+    >
+      <Navigation className="h-3 w-3" />
+      {label}
+    </a>
   )
 }

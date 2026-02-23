@@ -92,7 +92,7 @@ function createDefaultEvent(): EventConfig {
   return {
     id: "annual-gathering-2026",
     name: "Annual Gathering 2026",
-    date: "Saturday, April 18th, 2026",
+    date: "2026-04-18T19:00:00",
     location: "The Grand Hall, 123 Event Street",
     description: "Join us for an evening of celebration, great food, and wonderful company. An unforgettable night awaits.",
     heroMediaUrl: "https://videos.pexels.com/video-files/3571264/3571264-uhd_2560_1440_30fps.mp4",
@@ -227,7 +227,7 @@ export function createEvent(name: string): EventConfig {
   const event: EventConfig = {
     id: slug,
     name,
-    date: "TBD",
+    date: "",
     location: "TBD",
     description: "Event description here.",
     heroMediaUrl: "https://images.unsplash.com/photo-1519167758481-83f550bb49b3?w=1920&q=80",
