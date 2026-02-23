@@ -143,8 +143,10 @@ const defaultEventConfig: EventConfig = {
 
 // ---- In-memory stores ----
 const guestStore = new Map<string, Guest>()
-const sessionStore = new Map<string, string>()
 let eventConfig: EventConfig = JSON.parse(JSON.stringify(defaultEventConfig))
+
+// Secret used for simple HMAC-like session tokens
+const SESSION_SECRET = "event-rsvp-demo-secret-2026"
 
 // ---- OTP functions ----
 // Deterministic demo code based on phone number
@@ -165,15 +167,34 @@ export function verifyOTP(phone: string, code: string): boolean {
   return code === getDemoCode(phone)
 }
 
-// ---- Session functions ----
-export function createSession(phone: string): string {
-  const sessionId = crypto.randomUUID()
-  sessionStore.set(sessionId, phone)
-  return sessionId
+// ---- Session functions (stateless, encoded tokens) ----
+// Token format: base64(phone + "." + simpleHash(phone + secret))
+function simpleHash(str: string): string {
+  let h = 0
+  for (let i = 0; i < str.length; i++) {
+    h = ((h << 5) - h + str.charCodeAt(i)) | 0
+  }
+  return Math.abs(h).toString(36)
 }
 
-export function getSessionPhone(sessionId: string): string | null {
-  return sessionStore.get(sessionId) ?? null
+export function createSession(phone: string): string {
+  const sig = simpleHash(phone + SESSION_SECRET)
+  const payload = phone + "." + sig
+  return Buffer.from(payload).toString("base64url")
+}
+
+export function getSessionPhone(sessionToken: string): string | null {
+  try {
+    const payload = Buffer.from(sessionToken, "base64url").toString()
+    const dotIndex = payload.lastIndexOf(".")
+    if (dotIndex === -1) return null
+    const phone = payload.slice(0, dotIndex)
+    const sig = payload.slice(dotIndex + 1)
+    if (sig !== simpleHash(phone + SESSION_SECRET)) return null
+    return phone
+  } catch {
+    return null
+  }
 }
 
 // ---- Guest functions ----
