@@ -45,12 +45,6 @@ export interface Guest {
   submittedAt: string
 }
 
-export interface OTPEntry {
-  code: string
-  expiresAt: number
-  phone: string
-}
-
 // ---- Background Gallery ----
 export const BACKGROUND_GALLERY = [
   { id: "none", label: "No Background", type: "none" as const, value: "" },
@@ -148,33 +142,27 @@ const defaultEventConfig: EventConfig = {
 }
 
 // ---- In-memory stores ----
-const otpStore = new Map<string, OTPEntry>()
 const guestStore = new Map<string, Guest>()
 const sessionStore = new Map<string, string>()
 let eventConfig: EventConfig = JSON.parse(JSON.stringify(defaultEventConfig))
 
 // ---- OTP functions ----
+// Deterministic demo code based on phone number
+// In production, replace with real SMS + random code stored in a database
+function getDemoCode(phone: string): string {
+  let hash = 0
+  for (let i = 0; i < phone.length; i++) {
+    hash = ((hash << 5) - hash + phone.charCodeAt(i)) | 0
+  }
+  return String(Math.abs(hash) % 900000 + 100000)
+}
+
 export function generateOTP(phone: string): string {
-  const code = Math.floor(100000 + Math.random() * 900000).toString()
-  otpStore.set(phone, {
-    code,
-    expiresAt: Date.now() + 5 * 60 * 1000,
-    phone,
-  })
-  return code
+  return getDemoCode(phone)
 }
 
 export function verifyOTP(phone: string, code: string): boolean {
-  const entry = otpStore.get(phone)
-  console.log("[v0] verifyOTP: phone=", phone, "code=", code, "entry=", entry ? { code: entry.code, expiresAt: entry.expiresAt, now: Date.now() } : "NOT FOUND", "otpStoreKeys=", Array.from(otpStore.keys()))
-  if (!entry) return false
-  if (Date.now() > entry.expiresAt) {
-    otpStore.delete(phone)
-    return false
-  }
-  if (entry.code !== code) return false
-  otpStore.delete(phone)
-  return true
+  return code === getDemoCode(phone)
 }
 
 // ---- Session functions ----
