@@ -37,7 +37,7 @@ import {
   Check,
   X,
 } from "lucide-react"
-import type { Guest, EventPage, EventConfig, QuestionType, FontFamily } from "@/lib/store"
+import type { Guest, EventPage, EventConfig, QuestionType, FontFamily, HeroMediaType } from "@/lib/store"
 import { BACKGROUND_GALLERY, FONT_OPTIONS } from "@/lib/store"
 import { getFontStyle } from "@/lib/fonts"
 
@@ -207,16 +207,37 @@ function EventSettingsTab({
               placeholder="Event description..."
             />
           </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="video-url">Hero Video URL</Label>
+          <div className="flex flex-col gap-3">
+            <Label>Hero Media</Label>
+            <div className="flex gap-2">
+              {(["video", "image"] as const).map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => setConfig({ ...config, heroMediaType: type })}
+                  className={`rounded-lg border-2 px-4 py-2 text-sm font-medium capitalize transition-all ${
+                    config.heroMediaType === type
+                      ? "border-primary bg-primary/5 text-foreground"
+                      : "border-border text-muted-foreground hover:border-primary/30"
+                  }`}
+                >
+                  {type}
+                </button>
+              ))}
+            </div>
             <Input
-              id="video-url"
-              value={config.heroVideoUrl}
-              onChange={(e) => update("heroVideoUrl", e.target.value)}
-              placeholder="https://videos.pexels.com/..."
+              value={config.heroMediaUrl}
+              onChange={(e) => update("heroMediaUrl", e.target.value)}
+              placeholder={
+                config.heroMediaType === "video"
+                  ? "https://videos.pexels.com/..."
+                  : "https://images.unsplash.com/..."
+              }
             />
             <p className="text-xs text-muted-foreground">
-              Paste a direct link to a .mp4 video file for the landing page background
+              {config.heroMediaType === "video"
+                ? "Paste a direct link to a .mp4 video file for the landing page background"
+                : "Paste a direct link to an image (JPG, PNG, WebP) for the landing page background"}
             </p>
           </div>
         </CardContent>
@@ -280,12 +301,12 @@ function PageBuilderTab({
       id: `page-${Date.now()}`,
       title: "New Page",
       subtitle: "",
-      question: {
+      questions: [{
         id: `q-${Date.now()}`,
         type: "text",
         label: "Your question here",
         required: true,
-      },
+      }],
       backgroundId: "none",
     }
     setConfig({ ...config, pages: [...config.pages, newPage] })
@@ -360,8 +381,8 @@ function PageBuilderTab({
                 </div>
 
                 <div
-                  className="h-10 w-10 shrink-0 rounded-lg"
-                  style={getPageBgPreview(page.backgroundId)}
+                  className="h-10 w-10 shrink-0 rounded-lg bg-cover bg-center"
+                  style={getPageBgPreview(page.backgroundId, page.backgroundImageUrl)}
                 />
 
                 <div className="flex min-w-0 flex-1 flex-col">
@@ -369,7 +390,9 @@ function PageBuilderTab({
                     {page.title}
                   </span>
                   <span className="truncate text-xs text-muted-foreground">
-                    {page.question.type} - {page.question.label}
+                    {page.questions.length === 1
+                      ? `${page.questions[0].type} - ${page.questions[0].label}`
+                      : `${page.questions.length} questions`}
                   </span>
                 </div>
 
@@ -430,8 +453,38 @@ function PageEditor({
   page: EventPage
   onChange: (updates: Partial<EventPage>) => void
 }) {
-  function updateQuestion(field: string, value: string | string[] | number | boolean) {
-    onChange({ question: { ...page.question, [field]: value } })
+  function updateQuestion(qIndex: number, field: string, value: string | string[] | number | boolean) {
+    const newQuestions = page.questions.map((q, i) =>
+      i === qIndex ? { ...q, [field]: value } : q
+    )
+    onChange({ questions: newQuestions })
+  }
+
+  function updateQuestionType(qIndex: number, val: QuestionType) {
+    const q = page.questions[qIndex]
+    const newQ = {
+      ...q,
+      type: val,
+      options: val === "single-choice" || val === "multi-choice" ? q.options ?? ["Option 1", "Option 2"] : undefined,
+      min: val === "number" ? 0 : undefined,
+      max: val === "number" ? 10 : undefined,
+    }
+    const newQuestions = page.questions.map((qq, i) => (i === qIndex ? newQ : qq))
+    onChange({ questions: newQuestions })
+  }
+
+  function addQuestion() {
+    onChange({
+      questions: [
+        ...page.questions,
+        { id: `q-${Date.now()}`, type: "text", label: "New question", required: true },
+      ],
+    })
+  }
+
+  function removeQuestion(qIndex: number) {
+    if (page.questions.length <= 1) return
+    onChange({ questions: page.questions.filter((_, i) => i !== qIndex) })
   }
 
   return (
@@ -456,129 +509,166 @@ function PageEditor({
         </div>
       </div>
 
-      {/* Question Label */}
-      <div className="flex flex-col gap-1.5">
-        <Label className="text-xs">Question</Label>
-        <Input
-          value={page.question.label}
-          onChange={(e) => updateQuestion("label", e.target.value)}
-          placeholder="What is your full name?"
-        />
-      </div>
-
-      {/* Question Type + Required */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">Question Type</Label>
-          <Select
-            value={page.question.type}
-            onValueChange={(val: QuestionType) =>
-              onChange({
-                question: {
-                  ...page.question,
-                  type: val,
-                  options: val === "single-choice" || val === "multi-choice" ? page.question.options ?? ["Option 1", "Option 2"] : undefined,
-                  min: val === "number" ? 0 : undefined,
-                  max: val === "number" ? 10 : undefined,
-                },
-              })
-            }
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="text">Text Input</SelectItem>
-              <SelectItem value="single-choice">Single Choice (Boxes)</SelectItem>
-              <SelectItem value="multi-choice">Multi Choice (Boxes)</SelectItem>
-              <SelectItem value="number">Number Stepper</SelectItem>
-              <SelectItem value="yes-no">Yes / No</SelectItem>
-              <SelectItem value="guest-count">Guest Count (Age Groups)</SelectItem>
-            </SelectContent>
-          </Select>
+      {/* Questions */}
+      <div className="flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <Label className="text-xs">Questions ({page.questions.length})</Label>
+          <Button variant="outline" size="sm" onClick={addQuestion} className="h-7 gap-1 text-xs">
+            <Plus className="h-3 w-3" />
+            Add Question
+          </Button>
         </div>
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-xs">Required</Label>
-          <div className="flex h-9 items-center gap-2">
-            <button
-              type="button"
-              onClick={() => updateQuestion("required", !page.question.required)}
-              className={`relative h-6 w-11 rounded-full transition-colors ${
-                page.question.required ? "bg-primary" : "bg-muted"
-              }`}
-              role="switch"
-              aria-checked={page.question.required}
-            >
-              <span
-                className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${
-                  page.question.required ? "translate-x-5" : "translate-x-0"
-                }`}
+
+        {page.questions.map((q, qIndex) => (
+          <div key={q.id} className="flex flex-col gap-3 rounded-xl border border-border/60 bg-muted/30 p-4">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex-1">
+                <Input
+                  value={q.label}
+                  onChange={(e) => updateQuestion(qIndex, "label", e.target.value)}
+                  placeholder="What is your full name?"
+                  className="text-sm"
+                />
+              </div>
+              {page.questions.length > 1 && (
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => removeQuestion(qIndex)}
+                  className="shrink-0 text-muted-foreground hover:text-destructive"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="flex flex-col gap-1">
+                <Label className="text-[11px] text-muted-foreground">Type</Label>
+                <Select
+                  value={q.type}
+                  onValueChange={(val: QuestionType) => updateQuestionType(qIndex, val)}
+                >
+                  <SelectTrigger className="h-8 w-full text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="text">Text Input</SelectItem>
+                    <SelectItem value="single-choice">Single Choice (Boxes)</SelectItem>
+                    <SelectItem value="multi-choice">Multi Choice (Boxes)</SelectItem>
+                    <SelectItem value="number">Number Stepper</SelectItem>
+                    <SelectItem value="yes-no">Yes / No</SelectItem>
+                    <SelectItem value="guest-count">Guest Count (Age Groups)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-col gap-1">
+                <Label className="text-[11px] text-muted-foreground">Required</Label>
+                <div className="flex h-8 items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => updateQuestion(qIndex, "required", !q.required)}
+                    className={`relative h-5 w-9 rounded-full transition-colors ${q.required ? "bg-primary" : "bg-muted-foreground/30"}`}
+                    role="switch"
+                    aria-checked={q.required}
+                  >
+                    <span className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${q.required ? "translate-x-4" : "translate-x-0"}`} />
+                  </button>
+                  <span className="text-xs text-muted-foreground">{q.required ? "Required" : "Optional"}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Options editor for choice types */}
+            {(q.type === "single-choice" || q.type === "multi-choice") && (
+              <OptionsEditor
+                options={q.options ?? []}
+                onChange={(opts) => updateQuestion(qIndex, "options", opts)}
               />
-            </button>
-            <span className="text-sm text-muted-foreground">
-              {page.question.required ? "Required" : "Optional"}
-            </span>
+            )}
+
+            {/* Min/Max for number type */}
+            {q.type === "number" && (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1">
+                  <Label className="text-[11px] text-muted-foreground">Min</Label>
+                  <Input type="number" className="h-8 text-xs" value={q.min ?? 0} onChange={(e) => updateQuestion(qIndex, "min", parseInt(e.target.value) || 0)} />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <Label className="text-[11px] text-muted-foreground">Max</Label>
+                  <Input type="number" className="h-8 text-xs" value={q.max ?? 10} onChange={(e) => updateQuestion(qIndex, "max", parseInt(e.target.value) || 10)} />
+                </div>
+              </div>
+            )}
           </div>
-        </div>
+        ))}
       </div>
 
-      {/* Options editor for choice types */}
-      {(page.question.type === "single-choice" || page.question.type === "multi-choice") && (
-        <OptionsEditor
-          options={page.question.options ?? []}
-          onChange={(opts) => updateQuestion("options", opts)}
-        />
-      )}
-
-      {/* Min/Max for number type */}
-      {page.question.type === "number" && (
-        <div className="grid grid-cols-2 gap-4">
-          <div className="flex flex-col gap-1.5">
-            <Label className="text-xs">Min</Label>
-            <Input
-              type="number"
-              value={page.question.min ?? 0}
-              onChange={(e) => updateQuestion("min", parseInt(e.target.value) || 0)}
-            />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label className="text-xs">Max</Label>
-            <Input
-              type="number"
-              value={page.question.max ?? 10}
-              onChange={(e) => updateQuestion("max", parseInt(e.target.value) || 10)}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Background Picker */}
-      <div className="flex flex-col gap-2">
+      {/* Background Section */}
+      <Separator />
+      <div className="flex flex-col gap-3">
         <Label className="text-xs">Page Background</Label>
-        <div className="grid grid-cols-5 gap-2 sm:grid-cols-10">
+
+        {/* Gallery swatches */}
+        <div className="grid grid-cols-7 gap-2 sm:grid-cols-14">
           {BACKGROUND_GALLERY.map((bg) => {
-            const selected = page.backgroundId === bg.id
+            const selected = page.backgroundId === bg.id && !page.backgroundImageUrl
             return (
               <button
                 key={bg.id}
                 type="button"
-                onClick={() => onChange({ backgroundId: bg.id })}
-                className={`group relative flex h-12 w-full items-center justify-center rounded-lg border-2 transition-all ${
+                onClick={() => onChange({ backgroundId: bg.id, backgroundImageUrl: undefined })}
+                className={`group relative flex h-10 w-full items-center justify-center rounded-lg border-2 bg-cover bg-center transition-all ${
                   selected ? "border-primary ring-2 ring-primary/20" : "border-border hover:border-primary/40"
                 }`}
-                style={bg.type === "gradient" ? { background: bg.value } : bg.type === "none" ? { background: "#f3f3f3" } : {}}
+                style={
+                  bg.type === "gradient"
+                    ? { background: bg.value }
+                    : bg.type === "image"
+                      ? { backgroundImage: `url(${bg.value})`, backgroundSize: "cover" }
+                      : { background: "#f3f3f3" }
+                }
                 title={bg.label}
                 aria-label={bg.label}
               >
-                {bg.type === "none" && (
-                  <X className="h-3 w-3 text-muted-foreground" />
-                )}
-                {selected && bg.type !== "none" && (
-                  <Check className="h-4 w-4 text-white drop-shadow-md" />
-                )}
+                {bg.type === "none" && <X className="h-3 w-3 text-muted-foreground" />}
+                {selected && bg.type !== "none" && <Check className="h-3 w-3 text-white drop-shadow-md" />}
               </button>
             )
           })}
+        </div>
+
+        {/* Custom image URL */}
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-[11px] text-muted-foreground">Or paste a custom image URL</Label>
+          <div className="flex gap-2">
+            <Input
+              value={page.backgroundImageUrl ?? ""}
+              onChange={(e) =>
+                onChange({
+                  backgroundImageUrl: e.target.value || undefined,
+                })
+              }
+              placeholder="https://images.unsplash.com/..."
+              className="h-8 flex-1 text-xs"
+            />
+            {page.backgroundImageUrl && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 text-xs text-muted-foreground"
+                onClick={() => onChange({ backgroundImageUrl: undefined })}
+              >
+                Clear
+              </Button>
+            )}
+          </div>
+          {page.backgroundImageUrl && (
+            <div
+              className="mt-1 h-16 w-full rounded-lg border bg-cover bg-center"
+              style={{ backgroundImage: `url(${page.backgroundImageUrl})` }}
+            />
+          )}
         </div>
       </div>
     </div>
@@ -654,10 +744,11 @@ function ResponsesTab({
   }
 
   // Find the yes-no or attendance question
-  const attendanceQuestion = pages.find(
-    (p) => p.question.type === "yes-no" || p.question.id === "q-attendance"
+  const allQuestions = pages.flatMap((p) => p.questions)
+  const attendanceQuestion = allQuestions.find(
+    (q) => q.type === "yes-no" || q.id === "q-attendance"
   )
-  const attQid = attendanceQuestion?.question.id
+  const attQid = attendanceQuestion?.id
 
   const attendingCount = attQid
     ? guests.filter((g) => g.responses[attQid] === true || g.responses[attQid] === "Yes").length
@@ -731,10 +822,9 @@ function ResponsesTab({
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Name</TableHead>
                     <TableHead>Phone</TableHead>
-                    {pages.map((p) => (
-                      <TableHead key={p.id}>{p.title}</TableHead>
+                    {allQuestions.map((q) => (
+                      <TableHead key={q.id}>{q.label}</TableHead>
                     ))}
                     <TableHead>Submitted</TableHead>
                   </TableRow>
@@ -742,14 +832,13 @@ function ResponsesTab({
                 <TableBody>
                   {guests.map((guest) => (
                     <TableRow key={guest.id}>
-                      <TableCell className="font-medium text-foreground">{guest.name}</TableCell>
                       <TableCell className="font-mono text-xs text-muted-foreground">
                         {guest.phone}
                       </TableCell>
-                      {pages.map((p) => {
-                        const val = guest.responses[p.question.id]
+                      {allQuestions.map((q) => {
+                        const val = guest.responses[q.id]
                         return (
-                          <TableCell key={p.id} className="text-muted-foreground">
+                          <TableCell key={q.id} className="text-muted-foreground">
                             {formatResponseValue(val)}
                           </TableCell>
                         )
@@ -790,9 +879,13 @@ function formatResponseValue(val: unknown): string {
   return String(val)
 }
 
-function getPageBgPreview(backgroundId: string): React.CSSProperties {
+function getPageBgPreview(backgroundId: string, imageUrl?: string): React.CSSProperties {
+  if (imageUrl) {
+    return { backgroundImage: `url(${imageUrl})`, backgroundSize: "cover", backgroundPosition: "center" }
+  }
   const bg = BACKGROUND_GALLERY.find((b) => b.id === backgroundId)
   if (!bg || bg.type === "none") return { background: "#e5e5e5" }
   if (bg.type === "gradient") return { background: bg.value }
+  if (bg.type === "image") return { backgroundImage: `url(${bg.value})`, backgroundSize: "cover", backgroundPosition: "center" }
   return { background: "#e5e5e5" }
 }

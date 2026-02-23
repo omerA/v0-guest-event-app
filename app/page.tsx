@@ -14,7 +14,8 @@ export default function HomePage() {
         eventDate={config.date}
         eventLocation={config.location}
         eventDescription={config.description}
-        videoUrl={config.heroVideoUrl}
+        mediaUrl={config.heroMediaUrl}
+        mediaType={config.heroMediaType}
         fontClass={fontClass}
       />
       <EventDetails

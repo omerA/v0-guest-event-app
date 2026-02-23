@@ -20,16 +20,20 @@ export interface EventPage {
   id: string
   title: string
   subtitle?: string
-  question: Question
+  questions: Question[]
   backgroundId: string // references BACKGROUND_GALLERY
+  backgroundImageUrl?: string // custom image URL overrides gallery background
 }
+
+export type HeroMediaType = "video" | "image"
 
 export interface EventConfig {
   name: string
   date: string
   location: string
   description: string
-  heroVideoUrl: string
+  heroMediaUrl: string
+  heroMediaType: HeroMediaType
   fontFamily: FontFamily
   pages: EventPage[]
 }
@@ -57,6 +61,10 @@ export const BACKGROUND_GALLERY = [
   { id: "gradient-noir", label: "Noir", type: "gradient" as const, value: "linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)" },
   { id: "gradient-sage", label: "Sage", type: "gradient" as const, value: "linear-gradient(135deg, #4a6741 0%, #7a9e6e 50%, #a8c49a 100%)" },
   { id: "gradient-dusk", label: "Dusk", type: "gradient" as const, value: "linear-gradient(135deg, #2c1654 0%, #6b3a7d 50%, #c06c84 100%)" },
+  { id: "img-flowers", label: "Flowers", type: "image" as const, value: "https://images.unsplash.com/photo-1490750967868-88aa4f44baee?w=1200&q=80" },
+  { id: "img-mountains", label: "Mountains", type: "image" as const, value: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1200&q=80" },
+  { id: "img-candles", label: "Candles", type: "image" as const, value: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=1200&q=80" },
+  { id: "img-ballroom", label: "Ballroom", type: "image" as const, value: "https://images.unsplash.com/photo-1519167758481-83f550bb49b3?w=1200&q=80" },
 ] as const
 
 // ---- Font Options ----
@@ -74,68 +82,69 @@ const defaultEventConfig: EventConfig = {
   date: "Saturday, April 18th, 2026",
   location: "The Grand Hall, 123 Event Street",
   description: "Join us for an evening of celebration, great food, and wonderful company. An unforgettable night awaits.",
-  heroVideoUrl: "https://videos.pexels.com/video-files/3571264/3571264-uhd_2560_1440_30fps.mp4",
+  heroMediaUrl: "https://videos.pexels.com/video-files/3571264/3571264-uhd_2560_1440_30fps.mp4",
+  heroMediaType: "video",
   fontFamily: "playfair",
   pages: [
     {
       id: "page-1",
       title: "Your Name",
       subtitle: "Let us know who you are",
-      question: {
+      questions: [{
         id: "q-name",
         type: "text",
         label: "What is your full name?",
         required: true,
-      },
+      }],
       backgroundId: "gradient-champagne",
     },
     {
       id: "page-2",
       title: "Your Attendance",
       subtitle: "Will you be joining us?",
-      question: {
+      questions: [{
         id: "q-attendance",
         type: "yes-no",
         label: "Will you attend the event?",
         required: true,
-      },
+      }],
       backgroundId: "gradient-forest",
     },
     {
       id: "page-3",
       title: "Dietary Preference",
       subtitle: "Help us prepare for you",
-      question: {
+      questions: [{
         id: "q-dietary",
         type: "single-choice",
         label: "Do you have any dietary preferences?",
         options: ["No Preference", "Vegetarian", "Vegan", "Gluten-Free", "Halal", "Kosher"],
         required: true,
-      },
+      }],
       backgroundId: "gradient-rose",
     },
     {
       id: "page-4",
       title: "Plus Ones",
       subtitle: "Bringing anyone along?",
-      question: {
+      questions: [{
         id: "q-guests",
         type: "guest-count",
         label: "How many additional guests are coming with you?",
         required: false,
-      },
+      }],
       backgroundId: "gradient-ocean",
     },
     {
       id: "page-5",
       title: "Special Requests",
       subtitle: "Anything else we should know?",
-      question: {
+      questions: [{
         id: "q-notes",
         type: "text",
         label: "Any special requests or notes?",
         required: false,
-      },
+      }],
       backgroundId: "gradient-midnight",
     },
   ],

@@ -4,12 +4,15 @@ import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { ChevronDown } from "lucide-react"
 
+import type { HeroMediaType } from "@/lib/store"
+
 interface VideoHeroProps {
   eventName: string
   eventDate: string
   eventLocation: string
   eventDescription: string
-  videoUrl: string
+  mediaUrl: string
+  mediaType: HeroMediaType
   fontClass: string
 }
 
@@ -18,31 +21,45 @@ export function VideoHero({
   eventDate,
   eventLocation,
   eventDescription,
-  videoUrl,
+  mediaUrl,
+  mediaType,
   fontClass,
 }: VideoHeroProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
+    if (mediaType !== "video") {
+      setLoaded(true)
+      return
+    }
     const video = videoRef.current
     if (!video) return
     video.play().catch(() => {})
-  }, [])
+  }, [mediaType])
 
   return (
     <section className="relative flex h-dvh w-full flex-col items-center justify-center overflow-hidden">
-      {/* Video Background */}
-      <video
-        ref={videoRef}
-        className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-1000 ${loaded ? "opacity-100" : "opacity-0"}`}
-        src={videoUrl}
-        muted
-        autoPlay
-        loop
-        playsInline
-        onLoadedData={() => setLoaded(true)}
-      />
+      {/* Media Background */}
+      {mediaType === "video" ? (
+        <video
+          ref={videoRef}
+          className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-1000 ${loaded ? "opacity-100" : "opacity-0"}`}
+          src={mediaUrl}
+          muted
+          autoPlay
+          loop
+          playsInline
+          onLoadedData={() => setLoaded(true)}
+        />
+      ) : (
+        <img
+          src={mediaUrl}
+          alt=""
+          className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-1000 ${loaded ? "opacity-100" : "opacity-0"}`}
+          onLoad={() => setLoaded(true)}
+        />
+      )}
 
       {/* Dark Overlay */}
       <div className="absolute inset-0 bg-black/55" />

@@ -111,15 +111,17 @@ export function RsvpFlow({ pages, fontClass, eventName }: RsvpFlowProps) {
     }
   }, [responses, sessionToken])
 
-  const currentQuestion = pages[currentPage]?.question
-  const currentAnswer = currentQuestion ? responses[currentQuestion.id] : undefined
-  const isRequired = currentQuestion?.required
-  const hasAnswer =
-    currentAnswer !== undefined &&
-    currentAnswer !== "" &&
-    !(Array.isArray(currentAnswer) && currentAnswer.length === 0)
+  const currentQuestions = pages[currentPage]?.questions ?? []
 
-  const canProceed = !isRequired || hasAnswer
+  const canProceed = currentQuestions.every((q) => {
+    if (!q.required) return true
+    const answer = responses[q.id]
+    return (
+      answer !== undefined &&
+      answer !== "" &&
+      !(Array.isArray(answer) && answer.length === 0)
+    )
+  })
 
   function handleNext() {
     if (currentPage < totalPages - 1) {
@@ -144,7 +146,7 @@ export function RsvpFlow({ pages, fontClass, eventName }: RsvpFlowProps) {
       return { background: "linear-gradient(135deg, #134e5e 0%, #3a8f6a 50%, #71b280 100%)" }
     }
     if (step === "questions" && pages[currentPage]) {
-      return getBackgroundStyle(pages[currentPage].backgroundId)
+      return getBackgroundStyle(pages[currentPage].backgroundId, pages[currentPage].backgroundImageUrl)
     }
     return { background: "#1a1a2e" }
   }
@@ -277,24 +279,30 @@ export function RsvpFlow({ pages, fontClass, eventName }: RsvpFlowProps) {
                 {pages[currentPage].subtitle && (
                   <p className="text-base text-white/60">{pages[currentPage].subtitle}</p>
                 )}
-                <p className="mt-3 text-lg text-white/80">
-                  {currentQuestion?.label}
-                  {!isRequired && (
-                    <span className="ml-2 text-sm text-white/40">(optional)</span>
-                  )}
-                </p>
               </div>
 
-              <QuestionRenderer
-                question={currentQuestion!}
-                value={currentAnswer}
-                onChange={(val) =>
-                  setResponses((prev) => ({
-                    ...prev,
-                    [currentQuestion!.id]: val,
-                  }))
-                }
-              />
+              <div className="flex w-full flex-col items-center gap-6">
+                {currentQuestions.map((q) => (
+                  <div key={q.id} className="flex w-full flex-col items-center gap-3">
+                    <p className="text-lg text-white/80 text-center">
+                      {q.label}
+                      {!q.required && (
+                        <span className="ml-2 text-sm text-white/40">(optional)</span>
+                      )}
+                    </p>
+                    <QuestionRenderer
+                      question={q}
+                      value={responses[q.id]}
+                      onChange={(val) =>
+                        setResponses((prev) => ({
+                          ...prev,
+                          [q.id]: val,
+                        }))
+                      }
+                    />
+                  </div>
+                ))}
+              </div>
 
               {error && <p className="text-center text-sm text-red-300">{error}</p>}
             </>
