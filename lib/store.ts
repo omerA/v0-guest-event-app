@@ -1,7 +1,7 @@
 // In-memory data store (resets on server restart)
 // In production, replace with a database integration
 
-export type QuestionType = "text" | "single-choice" | "multi-choice" | "number" | "yes-no"
+export type QuestionType = "text" | "single-choice" | "multi-choice" | "number" | "yes-no" | "guest-count"
 
 export type FontFamily = "playfair" | "cormorant" | "dm-serif" | "libre-baskerville" | "crimson-pro"
 
@@ -34,11 +34,14 @@ export interface EventConfig {
   pages: EventPage[]
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type ResponseValue = string | string[] | number | boolean | Record<string, any>
+
 export interface Guest {
   id: string
   phone: string
   name: string
-  responses: Record<string, string | string[] | number | boolean>
+  responses: Record<string, ResponseValue>
   submittedAt: string
 }
 
@@ -123,11 +126,9 @@ const defaultEventConfig: EventConfig = {
       subtitle: "Bringing anyone along?",
       question: {
         id: "q-guests",
-        type: "number",
-        label: "How many additional guests?",
-        min: 0,
-        max: 10,
-        required: true,
+        type: "guest-count",
+        label: "How many additional guests are coming with you?",
+        required: false,
       },
       backgroundId: "gradient-ocean",
     },
@@ -189,7 +190,7 @@ export function getSessionPhone(sessionId: string): string | null {
 // ---- Guest functions ----
 export function saveGuestResponse(
   phone: string,
-  responses: Record<string, string | string[] | number | boolean>
+  responses: Record<string, ResponseValue>
 ): Guest {
   const nameAnswer = responses["q-name"]
   const name = typeof nameAnswer === "string" ? nameAnswer : "Unknown"

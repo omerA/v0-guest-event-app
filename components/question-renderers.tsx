@@ -1,12 +1,21 @@
 "use client"
 
-import { Check, Minus, Plus } from "lucide-react"
+import { Check, Minus, Plus, Baby, User, Users } from "lucide-react"
 import type { Question } from "@/lib/store"
+
+export interface GuestCountValue {
+  babies: number
+  children: number
+  adults: number
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyValue = any
 
 interface RendererProps {
   question: Question
-  value: string | string[] | number | boolean | undefined
-  onChange: (val: string | string[] | number | boolean) => void
+  value: AnyValue
+  onChange: (val: AnyValue) => void
 }
 
 export function QuestionRenderer({ question, value, onChange }: RendererProps) {
@@ -21,6 +30,8 @@ export function QuestionRenderer({ question, value, onChange }: RendererProps) {
       return <NumberRenderer question={question} value={value as number | undefined} onChange={onChange} />
     case "yes-no":
       return <YesNoRenderer question={question} value={value as boolean | undefined} onChange={onChange} />
+    case "guest-count":
+      return <GuestCountRenderer question={question} value={value as GuestCountValue | undefined} onChange={onChange} />
     default:
       return null
   }
@@ -225,6 +236,83 @@ function YesNoRenderer({
           </button>
         )
       })}
+    </div>
+  )
+}
+
+// ---- Guest Count by Age Group (like flights/accommodations) ----
+
+const AGE_GROUPS = [
+  { key: "adults" as const, label: "Adults", sublabel: "18+", icon: Users },
+  { key: "children" as const, label: "Children", sublabel: "3 - 17", icon: User },
+  { key: "babies" as const, label: "Babies", sublabel: "0 - 2", icon: Baby },
+]
+
+function GuestCountRenderer({
+  value,
+  onChange,
+}: {
+  question: Question
+  value: GuestCountValue | undefined
+  onChange: (val: GuestCountValue) => void
+}) {
+  const counts: GuestCountValue = value ?? { babies: 0, children: 0, adults: 0 }
+
+  function update(key: keyof GuestCountValue, delta: number) {
+    const next = { ...counts, [key]: Math.max(0, Math.min(10, counts[key] + delta)) }
+    onChange(next)
+  }
+
+  const total = counts.adults + counts.children + counts.babies
+
+  return (
+    <div className="flex w-full max-w-md flex-col gap-3">
+      {AGE_GROUPS.map(({ key, label, sublabel, icon: Icon }) => (
+        <div
+          key={key}
+          className="flex items-center justify-between rounded-2xl border-2 border-white/15 bg-white/5 px-5 py-4 backdrop-blur-sm"
+        >
+          <div className="flex items-center gap-4">
+            <div className="flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-white/10">
+              <Icon className="h-5 w-5 text-white/70" />
+            </div>
+            <div>
+              <p className="text-lg font-medium text-white">{label}</p>
+              <p className="text-sm text-white/45">{sublabel}</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => update(key, -1)}
+              disabled={counts[key] <= 0}
+              className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-white/20 bg-white/10 text-white transition-all hover:border-white/40 hover:bg-white/20 active:scale-90 disabled:opacity-25"
+              aria-label={`Decrease ${label}`}
+            >
+              <Minus className="h-4 w-4" />
+            </button>
+
+            <span className="min-w-[32px] text-center text-2xl font-light text-white tabular-nums">
+              {counts[key]}
+            </span>
+
+            <button
+              type="button"
+              onClick={() => update(key, 1)}
+              disabled={counts[key] >= 10}
+              className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-white/20 bg-white/10 text-white transition-all hover:border-white/40 hover:bg-white/20 active:scale-90 disabled:opacity-25"
+              aria-label={`Increase ${label}`}
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      ))}
+
+      <p className="mt-1 text-center text-sm text-white/40">
+        {total === 0 ? "No additional guests" : `${total} additional guest${total !== 1 ? "s" : ""}`}
+      </p>
     </div>
   )
 }

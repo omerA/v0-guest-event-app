@@ -4,8 +4,11 @@ import { useState, useCallback } from "react"
 import { ArrowLeft, ArrowRight, Send, Check, Loader2 } from "lucide-react"
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp"
 import { QuestionRenderer } from "@/components/question-renderers"
+import type { GuestCountValue } from "@/components/question-renderers"
 import type { EventPage } from "@/lib/store"
 import { getBackgroundStyle } from "@/lib/backgrounds"
+
+type ResponseValue = string | string[] | number | boolean | GuestCountValue
 
 interface RsvpFlowProps {
   pages: EventPage[]
@@ -20,8 +23,9 @@ export function RsvpFlow({ pages, fontClass, eventName }: RsvpFlowProps) {
   const [phone, setPhone] = useState("")
   const [otp, setOtp] = useState("")
   const [demoCode, setDemoCode] = useState("")
+  const [sessionToken, setSessionToken] = useState("")
   const [currentPage, setCurrentPage] = useState(0)
-  const [responses, setResponses] = useState<Record<string, string | string[] | number | boolean>>({})
+  const [responses, setResponses] = useState<Record<string, ResponseValue>>({})
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
 
@@ -32,14 +36,12 @@ export function RsvpFlow({ pages, fontClass, eventName }: RsvpFlowProps) {
     setLoading(true)
     setError("")
     try {
-      console.log("[v0] Sending code for phone:", phone)
       const res = await fetch("/api/auth/send-code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone }),
       })
       const data = await res.json()
-      console.log("[v0] Send code response:", res.status, data)
       if (!res.ok) {
         setError(data.error || "Failed to send code")
         return
@@ -55,7 +57,6 @@ export function RsvpFlow({ pages, fontClass, eventName }: RsvpFlowProps) {
 
   const handleVerifyCode = useCallback(async (codeOverride?: string) => {
     const codeToVerify = codeOverride || otp
-    console.log("[v0] Verifying code:", codeToVerify, "phone:", phone, "otp state:", otp)
     if (codeToVerify.length < 6) return
     setLoading(true)
     setError("")
@@ -66,10 +67,12 @@ export function RsvpFlow({ pages, fontClass, eventName }: RsvpFlowProps) {
         body: JSON.stringify({ phone, code: codeToVerify }),
       })
       const data = await res.json()
-      console.log("[v0] Verify response:", res.status, data)
       if (!res.ok) {
         setError(data.error || "Invalid code")
         return
+      }
+      if (data.sessionId) {
+        setSessionToken(data.sessionId)
       }
       if (data.alreadyResponded) {
         setStep("complete")
@@ -87,14 +90,15 @@ export function RsvpFlow({ pages, fontClass, eventName }: RsvpFlowProps) {
     setLoading(true)
     setError("")
     try {
-      console.log("[v0] Submitting responses:", responses)
       const res = await fetch("/api/responses", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${sessionToken}`,
+        },
         body: JSON.stringify({ responses }),
       })
       const data = await res.json()
-      console.log("[v0] Submit response:", res.status, data)
       if (!res.ok) {
         setError(data.error || "Failed to submit")
         return
@@ -105,7 +109,7 @@ export function RsvpFlow({ pages, fontClass, eventName }: RsvpFlowProps) {
     } finally {
       setLoading(false)
     }
-  }, [responses])
+  }, [responses, sessionToken])
 
   const currentQuestion = pages[currentPage]?.question
   const currentAnswer = currentQuestion ? responses[currentQuestion.id] : undefined

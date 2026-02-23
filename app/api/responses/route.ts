@@ -1,11 +1,17 @@
 import { NextResponse } from "next/server"
-import { cookies } from "next/headers"
 import { getSessionPhone, saveGuestResponse, getGuestByPhone } from "@/lib/store"
+
+function getSessionFromRequest(request: Request): string | null {
+  const authHeader = request.headers.get("authorization")
+  if (authHeader?.startsWith("Bearer ")) {
+    return authHeader.slice(7)
+  }
+  return null
+}
 
 export async function POST(request: Request) {
   try {
-    const cookieStore = await cookies()
-    const sessionId = cookieStore.get("session")?.value
+    const sessionId = getSessionFromRequest(request)
 
     if (!sessionId) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
@@ -29,10 +35,9 @@ export async function POST(request: Request) {
   }
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const cookieStore = await cookies()
-    const sessionId = cookieStore.get("session")?.value
+    const sessionId = getSessionFromRequest(request)
 
     if (!sessionId) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 })

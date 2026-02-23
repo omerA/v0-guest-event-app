@@ -493,6 +493,7 @@ function PageEditor({
               <SelectItem value="multi-choice">Multi Choice (Boxes)</SelectItem>
               <SelectItem value="number">Number Stepper</SelectItem>
               <SelectItem value="yes-no">Yes / No</SelectItem>
+              <SelectItem value="guest-count">Guest Count (Age Groups)</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -774,10 +775,18 @@ function ResponsesTab({
 }
 
 // ---- Helpers ----
-function formatResponseValue(val: string | string[] | number | boolean | undefined): string {
+function formatResponseValue(val: unknown): string {
   if (val === undefined || val === null) return "-"
   if (typeof val === "boolean") return val ? "Yes" : "No"
   if (Array.isArray(val)) return val.join(", ")
+  if (typeof val === "object" && val !== null) {
+    const gc = val as { adults?: number; children?: number; babies?: number }
+    const parts: string[] = []
+    if (gc.adults) parts.push(`${gc.adults} adult${gc.adults !== 1 ? "s" : ""}`)
+    if (gc.children) parts.push(`${gc.children} child${gc.children !== 1 ? "ren" : ""}`)
+    if (gc.babies) parts.push(`${gc.babies} bab${gc.babies !== 1 ? "ies" : "y"}`)
+    return parts.length > 0 ? parts.join(", ") : "None"
+  }
   return String(val)
 }
 
