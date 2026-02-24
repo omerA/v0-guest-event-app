@@ -27,6 +27,8 @@ export interface MediaPickerProps {
   accept: "image" | "video" | "any"
   /** Current URL — drives the thumbnail preview in the trigger area. */
   value?: string
+  /** Explicit type of the current value. Overrides URL-based detection (needed for extension-less CDN URLs). */
+  valueType?: MediaType
   onSelect: (url: string, type: MediaType) => void
   onClear?: () => void
 }
@@ -36,7 +38,7 @@ function detectMediaType(url: string): MediaType {
   return ["mp4", "mov", "webm", "ogg", "avi", "mkv"].includes(ext) ? "video" : "image"
 }
 
-export function MediaPicker({ accept, value, onSelect, onClear }: MediaPickerProps) {
+export function MediaPicker({ accept, value, valueType, onSelect, onClear }: MediaPickerProps) {
   const [open, setOpen] = useState(false)
   const [tab, setTab] = useState<"upload" | "library" | "url" | "search">("upload")
 
@@ -169,7 +171,7 @@ export function MediaPicker({ accept, value, onSelect, onClear }: MediaPickerPro
         {value ? (
           <div className="group relative w-full overflow-hidden rounded-lg border border-border bg-muted">
             <div className="aspect-video">
-              {detectMediaType(value) === "video" ? (
+              {(valueType ?? detectMediaType(value)) === "video" ? (
                 <video src={value} className="h-full w-full object-cover" muted playsInline />
               ) : (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -288,36 +290,51 @@ export function MediaPicker({ accept, value, onSelect, onClear }: MediaPickerPro
                     {filteredLibrary.map((file) => (
                       <div
                         key={file.key}
-                        className="group relative aspect-square cursor-pointer overflow-hidden rounded-lg border border-border bg-muted transition-shadow hover:shadow-md"
+                        className="group flex cursor-pointer flex-col gap-1"
                         onClick={() => confirmSelect(file.url, file.type as MediaType)}
                       >
-                        {file.type === "video" ? (
-                          <div className="flex h-full flex-col items-center justify-center gap-1 bg-muted">
-                            <Play className="h-6 w-6 text-muted-foreground" />
-                            <span className="text-[10px] text-muted-foreground">Video</span>
+                        <div className="relative aspect-square overflow-hidden rounded-lg border border-border bg-muted transition-shadow hover:shadow-md">
+                          {file.type === "video" ? (
+                            <>
+                              <video
+                                src={file.url}
+                                className="h-full w-full object-cover"
+                                preload="metadata"
+                                muted
+                                playsInline
+                              />
+                              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-black/50">
+                                  <Play className="h-3.5 w-3.5 fill-white text-white" />
+                                </div>
+                              </div>
+                            </>
+                          ) : (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={file.url} alt={file.name} className="h-full w-full object-cover" />
+                          )}
+                          {/* Delete button */}
+                          <div className="absolute inset-0 flex items-start justify-end p-1.5 opacity-0 transition-opacity group-hover:opacity-100">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                void handleDelete(file.key)
+                              }}
+                              className="flex h-6 w-6 items-center justify-center rounded-md bg-black/60 text-white hover:bg-red-600"
+                              disabled={deletingKey === file.key}
+                            >
+                              {deletingKey === file.key ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-3 w-3" />
+                              )}
+                            </button>
                           </div>
-                        ) : (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={file.url} alt={file.name} className="h-full w-full object-cover" />
-                        )}
-                        {/* Delete button */}
-                        <div className="absolute inset-0 flex items-start justify-end p-1.5 opacity-0 transition-opacity group-hover:opacity-100">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              void handleDelete(file.key)
-                            }}
-                            className="flex h-6 w-6 items-center justify-center rounded-md bg-black/60 text-white hover:bg-red-600"
-                            disabled={deletingKey === file.key}
-                          >
-                            {deletingKey === file.key ? (
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                            ) : (
-                              <Trash2 className="h-3 w-3" />
-                            )}
-                          </button>
                         </div>
+                        <p className="truncate px-0.5 text-[11px] text-muted-foreground" title={file.name}>
+                          {file.name}
+                        </p>
                       </div>
                     ))}
                   </div>

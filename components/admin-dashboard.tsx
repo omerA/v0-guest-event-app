@@ -504,10 +504,8 @@ function EventSettingsTab({ config, setConfig }: { config: EventConfig; setConfi
             <MediaPicker
               accept="any"
               value={config.heroMediaUrl || undefined}
-              onSelect={(url, type) => {
-                update("heroMediaUrl", url)
-                update("heroMediaType", type)
-              }}
+              valueType={(config.heroMediaType as "image" | "video") || undefined}
+              onSelect={(url, type) => setConfig({ ...config, heroMediaUrl: url, heroMediaType: type })}
               onClear={() => update("heroMediaUrl", "")}
             />
             <p className="text-xs text-muted-foreground">
