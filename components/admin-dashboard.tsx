@@ -26,13 +26,11 @@ import {
   Calendar,
   ExternalLink,
   Copy,
-  Upload,
 } from "lucide-react"
-import { useUploadThing } from "@/lib/uploadthing-client"
-import type { OurFileRouter } from "@/lib/uploadthing"
+import { MediaPicker } from "@/components/media-picker"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar as CalendarWidget } from "@/components/ui/calendar"
-import type { Guest, EventPage, EventConfig, QuestionType, HeroMediaType } from "@/lib/store"
+import type { Guest, EventPage, EventConfig, QuestionType } from "@/lib/store"
 import { BACKGROUND_GALLERY, FONT_OPTIONS } from "@/lib/store"
 import { getFontStyle } from "@/lib/fonts"
 import { formatEventDateShort } from "@/lib/date-utils"
@@ -503,43 +501,17 @@ function EventSettingsTab({ config, setConfig }: { config: EventConfig; setConfi
           </div>
           <div className="flex flex-col gap-3">
             <Label>Hero Media</Label>
-            <div className="flex gap-2">
-              {(["video", "image"] as const).map((type) => (
-                <button
-                  key={type}
-                  type="button"
-                  onClick={() => setConfig({ ...config, heroMediaType: type })}
-                  className={`rounded-lg border-2 px-4 py-2 text-sm font-medium capitalize transition-all ${
-                    config.heroMediaType === type
-                      ? "border-primary bg-primary/5 text-foreground"
-                      : "border-border text-muted-foreground hover:border-primary/30"
-                  }`}
-                >
-                  {type}
-                </button>
-              ))}
-            </div>
-            <div className="flex gap-2">
-              <Input
-                value={config.heroMediaUrl}
-                onChange={(e) => update("heroMediaUrl", e.target.value)}
-                placeholder={
-                  config.heroMediaType === "video" ? "https://videos.pexels.com/..." : "https://images.unsplash.com/..."
-                }
-                className="flex-1"
-              />
-              <HeroUploadButton
-                mediaType={config.heroMediaType}
-                onUploadComplete={(url, type) => {
-                  update("heroMediaUrl", url)
-                  update("heroMediaType", type)
-                }}
-              />
-            </div>
+            <MediaPicker
+              accept="any"
+              value={config.heroMediaUrl || undefined}
+              onSelect={(url, type) => {
+                update("heroMediaUrl", url)
+                update("heroMediaType", type)
+              }}
+              onClear={() => update("heroMediaUrl", "")}
+            />
             <p className="text-xs text-muted-foreground">
-              {config.heroMediaType === "video"
-                ? "Paste a link or upload an .mp4 video file for the landing page background"
-                : "Paste a link or upload an image (JPG, PNG, WebP) for the landing page background"}
+              Upload, search, or paste a URL for the landing page hero background. Image or video accepted.
             </p>
           </div>
         </CardContent>
@@ -751,7 +723,7 @@ function PageBuilderTab({ config, setConfig }: { config: EventConfig; setConfig:
 function PageEditor({
   page,
   onChange,
-  eventId,
+  eventId: _eventId,
 }: {
   page: EventPage
   onChange: (updates: Partial<EventPage>) => void
@@ -939,43 +911,20 @@ function PageEditor({
           })}
         </div>
 
-        {/* Custom image URL */}
+        {/* Custom image picker */}
         <div className="flex flex-col gap-1.5">
-          <Label className="text-[11px] text-muted-foreground">Or paste / upload a custom image</Label>
-          <div className="flex gap-2">
-            <Input
-              value={page.backgroundImageUrl ?? ""}
-              onChange={(e) =>
-                onChange({
-                  backgroundImageUrl: e.target.value || undefined,
-                  backgroundId: e.target.value ? "custom" : page.backgroundId,
-                })
-              }
-              placeholder="https://images.unsplash.com/..."
-              className="h-8 flex-1 text-xs"
-            />
-            <PageBackgroundUploadButton
-              eventId={eventId}
-              pageId={page.id}
-              onUploadComplete={(url) => onChange({ backgroundImageUrl: url, backgroundId: "custom" })}
-            />
-            {page.backgroundImageUrl && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 text-xs text-muted-foreground"
-                onClick={() => onChange({ backgroundImageUrl: undefined })}
-              >
-                Clear
-              </Button>
-            )}
-          </div>
-          {page.backgroundImageUrl && (
-            <div
-              className="mt-1 h-16 w-full rounded-lg border bg-cover bg-center"
-              style={{ backgroundImage: `url(${page.backgroundImageUrl})` }}
-            />
-          )}
+          <Label className="text-[11px] text-muted-foreground">Or choose a custom image</Label>
+          <MediaPicker
+            accept="image"
+            value={page.backgroundImageUrl}
+            onSelect={(url) => onChange({ backgroundImageUrl: url, backgroundId: "custom" })}
+            onClear={() =>
+              onChange({
+                backgroundImageUrl: undefined,
+                backgroundId: page.backgroundId === "custom" ? "none" : page.backgroundId,
+              })
+            }
+          />
         </div>
       </div>
     </div>
@@ -1157,93 +1106,6 @@ function formatResponseValue(val: unknown): string {
     return parts.length > 0 ? parts.join(", ") : "None"
   }
   return String(val)
-}
-
-// ---- Hero Upload Button ----
-function HeroUploadButton({
-  mediaType,
-  onUploadComplete,
-}: {
-  mediaType: HeroMediaType
-  onUploadComplete: (url: string, type: HeroMediaType) => void
-}) {
-  const endpoint = (mediaType === "video" ? "heroVideo" : "heroImage") as keyof OurFileRouter
-  const { startUpload, isUploading } = useUploadThing(endpoint)
-
-  function handleClick() {
-    const input = document.createElement("input")
-    input.type = "file"
-    input.accept = mediaType === "video" ? "video/mp4,video/*" : "image/*"
-    input.onchange = async (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0]
-      if (!file) return
-      const result = await startUpload([file])
-      const uploaded = result?.[0]
-      if (uploaded) {
-        const url = (uploaded.serverData as { url?: string } | null)?.url ?? uploaded.url
-        if (url) onUploadComplete(url, mediaType)
-      }
-    }
-    input.click()
-  }
-
-  return (
-    <Button
-      type="button"
-      variant="outline"
-      size="sm"
-      className="gap-1.5 whitespace-nowrap"
-      disabled={isUploading}
-      onClick={handleClick}
-    >
-      {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-      {isUploading ? "Uploading…" : "Upload File"}
-    </Button>
-  )
-}
-
-// ---- Page Background Upload Button ----
-function PageBackgroundUploadButton({
-  eventId: _eventId, // reserved for future per-event scoping
-  pageId: _pageId,
-  onUploadComplete,
-}: {
-  eventId: string
-  pageId: string
-  onUploadComplete: (url: string) => void
-}) {
-  const { startUpload, isUploading } = useUploadThing("pageBackground")
-
-  function handleClick() {
-    const input = document.createElement("input")
-    input.type = "file"
-    input.accept = "image/*"
-    input.onchange = async (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0]
-      if (!file) return
-      const result = await startUpload([file])
-      const uploaded = result?.[0]
-      if (uploaded) {
-        const url = (uploaded.serverData as { url?: string } | null)?.url ?? uploaded.url
-        if (url) onUploadComplete(url)
-      }
-    }
-    input.click()
-  }
-
-  return (
-    <Button
-      type="button"
-      variant="outline"
-      size="sm"
-      className="h-8 gap-1.5 whitespace-nowrap text-xs"
-      disabled={isUploading}
-      onClick={handleClick}
-    >
-      {isUploading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
-      {isUploading ? "Uploading…" : "Upload"}
-    </Button>
-  )
 }
 
 function getPageBgPreview(backgroundId: string, imageUrl?: string): React.CSSProperties {

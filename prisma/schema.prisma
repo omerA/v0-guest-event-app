@@ -70,3 +70,14 @@ model OtpCode {
 
   @@index([phone, eventId])
 }
+
+model MediaFile {
+  id         String   @id @default(cuid())
+  url        String
+  key        String   @unique
+  name       String
+  size       Int
+  type       String
+  mimeType   String
+  uploadedAt DateTime @default(now())
+}

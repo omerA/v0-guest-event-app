@@ -1,23 +1,24 @@
-import { createHmac, timingSafeEqual } from "crypto"
-import { cookies } from "next/headers"
 import { createUploadthing, type FileRouter } from "uploadthing/next"
+import { db } from "./db"
+import { verifyAdmin } from "./admin-auth"
 
 const f = createUploadthing()
 
-function generateAdminToken(secret: string): string {
-  return createHmac("sha256", secret).update("admin").digest("base64url")
-}
-
-async function verifyAdmin() {
-  const cookieStore = await cookies()
-  const token = cookieStore.get("admin_token")?.value
-  const secret = process.env.SESSION_SECRET
-  if (!secret) throw new Error("SERVER_MISCONFIGURATION")
-  if (!token) throw new Error("UNAUTHORIZED")
-  const expected = generateAdminToken(secret)
-  const a = Buffer.from(token)
-  const b = Buffer.from(expected)
-  if (a.length !== b.length || !timingSafeEqual(a, b)) throw new Error("UNAUTHORIZED")
+async function saveToLibrary(file: { ufsUrl: string; key: string; name: string; size: number; type: string }) {
+  try {
+    await db.mediaFile.create({
+      data: {
+        url: file.ufsUrl,
+        key: file.key,
+        name: file.name,
+        size: file.size,
+        type: file.type.startsWith("video/") ? "video" : "image",
+        mimeType: file.type,
+      },
+    })
+  } catch {
+    // Non-fatal: duplicate key = file was already tracked
+  }
 }
 
 export const ourFileRouter = {
@@ -27,6 +28,7 @@ export const ourFileRouter = {
       return {}
     })
     .onUploadComplete(async ({ file }) => {
+      await saveToLibrary(file)
       return { url: file.ufsUrl }
     }),
 
@@ -36,6 +38,7 @@ export const ourFileRouter = {
       return {}
     })
     .onUploadComplete(async ({ file }) => {
+      await saveToLibrary(file)
       return { url: file.ufsUrl }
     }),
 
@@ -45,6 +48,7 @@ export const ourFileRouter = {
       return {}
     })
     .onUploadComplete(async ({ file }) => {
+      await saveToLibrary(file)
       return { url: file.ufsUrl }
     }),
 } satisfies FileRouter
