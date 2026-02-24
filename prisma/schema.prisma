@@ -1,0 +1,72 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Event {
+  id            String      @id
+  name          String
+  date          String
+  location      String
+  description   String
+  heroMediaUrl  String
+  heroMediaType String
+  fontFamily    String
+  createdAt     DateTime    @default(now())
+  pages         EventPage[]
+  guests        Guest[]
+}
+
+model EventPage {
+  id                 String     @id
+  eventId            String
+  event              Event      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  title              String
+  subtitle           String?
+  backgroundId       String
+  backgroundImageUrl String?
+  order              Int
+  questions          Question[]
+}
+
+model Question {
+  id          String    @id
+  pageId      String
+  page        EventPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  type        String
+  label       String
+  description String?
+  options     Json?
+  min         Int?
+  max         Int?
+  required    Boolean
+  order       Int
+}
+
+model Guest {
+  id          String   @id @default(cuid())
+  eventId     String
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  phone       String
+  name        String
+  responses   Json
+  submittedAt DateTime @default(now())
+
+  @@unique([eventId, phone])
+}
+
+model OtpCode {
+  id        String   @id @default(cuid())
+  phone     String
+  eventId   String
+  codeHash  String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([phone, eventId])
+}

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { getAllEvents, createEvent, deleteEvent } from "@/lib/store"
 
 export async function GET() {
-  const events = getAllEvents()
+  const events = await getAllEvents()
   return NextResponse.json({
     events: events.map((e) => ({
       id: e.id,
@@ -20,7 +20,7 @@ export async function POST(request: Request) {
     if (!name || typeof name !== "string" || name.trim().length < 2) {
       return NextResponse.json({ error: "Event name is required (min 2 chars)" }, { status: 400 })
     }
-    const event = createEvent(name.trim())
+    const event = await createEvent(name.trim())
     return NextResponse.json({ event }, { status: 201 })
   } catch {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
@@ -34,7 +34,7 @@ export async function DELETE(request: Request) {
     if (!eventId) {
       return NextResponse.json({ error: "eventId is required" }, { status: 400 })
     }
-    const ok = deleteEvent(eventId)
+    const ok = await deleteEvent(eventId)
     if (!ok) {
       return NextResponse.json({ error: "Event not found" }, { status: 404 })
     }

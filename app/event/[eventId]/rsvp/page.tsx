@@ -5,7 +5,7 @@ import { RsvpFlow } from "@/components/rsvp-flow"
 
 export async function generateMetadata({ params }: { params: Promise<{ eventId: string }> }) {
   const { eventId } = await params
-  const config = getEventConfig(eventId)
+  const config = await getEventConfig(eventId)
   if (!config) return { title: "Event Not Found" }
   return {
     title: `RSVP - ${config.name}`,
@@ -15,7 +15,7 @@ export async function generateMetadata({ params }: { params: Promise<{ eventId: 
 
 export default async function RsvpPage({ params }: { params: Promise<{ eventId: string }> }) {
   const { eventId } = await params
-  const config = getEventConfig(eventId)
+  const config = await getEventConfig(eventId)
   if (!config) notFound()
 
   const fontClass = getFontClass(config.fontFamily)
