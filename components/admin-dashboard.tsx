@@ -8,21 +8,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
   Users,
   RefreshCw,
@@ -37,13 +24,15 @@ import {
   Check,
   X,
   Calendar,
-  MapPin,
   ExternalLink,
   Copy,
+  Upload,
 } from "lucide-react"
+import { useUploadThing } from "@/lib/uploadthing-client"
+import type { OurFileRouter } from "@/lib/uploadthing"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar as CalendarWidget } from "@/components/ui/calendar"
-import type { Guest, EventPage, EventConfig, QuestionType, FontFamily, HeroMediaType } from "@/lib/store"
+import type { Guest, EventPage, EventConfig, QuestionType, HeroMediaType } from "@/lib/store"
 import { BACKGROUND_GALLERY, FONT_OPTIONS } from "@/lib/store"
 import { getFontStyle } from "@/lib/fonts"
 import { formatEventDateShort } from "@/lib/date-utils"
@@ -177,27 +166,30 @@ export function AdminDashboard() {
     }
   }, [newEventName])
 
-  const handleDeleteEvent = useCallback(async (eventId: string) => {
-    setDeletingEventId(eventId)
-    try {
-      const res = await fetch(`/api/events?eventId=${eventId}`, { method: "DELETE" })
-      if (res.ok) {
-        const remaining = events.filter((e) => e.id !== eventId)
-        setEvents(remaining)
-        if (selectedEventId === eventId) {
-          setSelectedEventId(remaining.length > 0 ? remaining[0].id : null)
-          if (remaining.length === 0) {
-            setConfig(null)
-            setGuests([])
+  const handleDeleteEvent = useCallback(
+    async (eventId: string) => {
+      setDeletingEventId(eventId)
+      try {
+        const res = await fetch(`/api/events?eventId=${eventId}`, { method: "DELETE" })
+        if (res.ok) {
+          const remaining = events.filter((e) => e.id !== eventId)
+          setEvents(remaining)
+          if (selectedEventId === eventId) {
+            setSelectedEventId(remaining.length > 0 ? remaining[0].id : null)
+            if (remaining.length === 0) {
+              setConfig(null)
+              setGuests([])
+            }
           }
         }
+      } catch {
+        // silently fail
+      } finally {
+        setDeletingEventId(null)
       }
-    } catch {
-      // silently fail
-    } finally {
-      setDeletingEventId(null)
-    }
-  }, [events, selectedEventId])
+    },
+    [events, selectedEventId]
+  )
 
   const copyEventLink = useCallback(() => {
     if (!selectedEventId) return
@@ -222,12 +214,7 @@ export function AdminDashboard() {
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-medium text-muted-foreground">Your Events</h2>
           {!showCreateForm && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowCreateForm(true)}
-              className="gap-1.5"
-            >
+            <Button variant="outline" size="sm" onClick={() => setShowCreateForm(true)} className="gap-1.5">
               <Plus className="h-3.5 w-3.5" />
               New Event
             </Button>
@@ -258,7 +245,10 @@ export function AdminDashboard() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => { setShowCreateForm(false); setNewEventName("") }}
+                onClick={() => {
+                  setShowCreateForm(false)
+                  setNewEventName("")
+                }}
               >
                 Cancel
               </Button>
@@ -278,9 +268,7 @@ export function AdminDashboard() {
                 onClick={() => setSelectedEventId(event.id)}
                 disabled={isDeleting}
                 className={`group relative flex min-w-[200px] max-w-[280px] shrink-0 flex-col gap-1.5 rounded-xl border-2 px-4 py-3 text-left transition-all ${
-                  isSelected
-                    ? "border-primary bg-primary/5 shadow-sm"
-                    : "border-border bg-card hover:border-primary/30"
+                  isSelected ? "border-primary bg-primary/5 shadow-sm" : "border-border bg-card hover:border-primary/30"
                 } ${isDeleting ? "opacity-50" : ""}`}
               >
                 <span className="truncate text-sm font-medium text-foreground">{event.name}</span>
@@ -294,7 +282,10 @@ export function AdminDashboard() {
                 {events.length > 1 && (
                   <button
                     type="button"
-                    onClick={(e) => { e.stopPropagation(); handleDeleteEvent(event.id) }}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleDeleteEvent(event.id)
+                    }}
                     className="absolute top-2 right-2 hidden rounded-md p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive group-hover:flex"
                     aria-label={`Delete ${event.name}`}
                   >
@@ -398,13 +389,7 @@ export function AdminDashboard() {
 }
 
 // ---- Date Time Picker ----
-function DateTimePicker({
-  value,
-  onChange,
-}: {
-  value: string
-  onChange: (iso: string) => void
-}) {
+function DateTimePicker({ value, onChange }: { value: string; onChange: (iso: string) => void }) {
   const date = value ? parseISO(value) : undefined
   const isDateValid = date && isValid(date)
 
@@ -468,13 +453,7 @@ function DateTimePicker({
 }
 
 // ---- Event Settings Tab ----
-function EventSettingsTab({
-  config,
-  setConfig,
-}: {
-  config: EventConfig
-  setConfig: (c: EventConfig) => void
-}) {
+function EventSettingsTab({ config, setConfig }: { config: EventConfig; setConfig: (c: EventConfig) => void }) {
   function update(field: keyof EventConfig, value: string) {
     setConfig({ ...config, [field]: value })
   }
@@ -499,10 +478,7 @@ function EventSettingsTab({
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="flex flex-col gap-2 sm:col-span-2">
               <Label>Date & Time</Label>
-              <DateTimePicker
-                value={config.date}
-                onChange={(val) => update("date", val)}
-              />
+              <DateTimePicker value={config.date} onChange={(val) => update("date", val)} />
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="event-location">Location</Label>
@@ -543,19 +519,27 @@ function EventSettingsTab({
                 </button>
               ))}
             </div>
-            <Input
-              value={config.heroMediaUrl}
-              onChange={(e) => update("heroMediaUrl", e.target.value)}
-              placeholder={
-                config.heroMediaType === "video"
-                  ? "https://videos.pexels.com/..."
-                  : "https://images.unsplash.com/..."
-              }
-            />
+            <div className="flex gap-2">
+              <Input
+                value={config.heroMediaUrl}
+                onChange={(e) => update("heroMediaUrl", e.target.value)}
+                placeholder={
+                  config.heroMediaType === "video" ? "https://videos.pexels.com/..." : "https://images.unsplash.com/..."
+                }
+                className="flex-1"
+              />
+              <HeroUploadButton
+                mediaType={config.heroMediaType}
+                onUploadComplete={(url, type) => {
+                  update("heroMediaUrl", url)
+                  update("heroMediaType", type)
+                }}
+              />
+            </div>
             <p className="text-xs text-muted-foreground">
               {config.heroMediaType === "video"
-                ? "Paste a direct link to a .mp4 video file for the landing page background"
-                : "Paste a direct link to an image (JPG, PNG, WebP) for the landing page background"}
+                ? "Paste a link or upload an .mp4 video file for the landing page background"
+                : "Paste a link or upload an image (JPG, PNG, WebP) for the landing page background"}
             </p>
           </div>
         </CardContent>
@@ -577,15 +561,10 @@ function EventSettingsTab({
                   type="button"
                   onClick={() => setConfig({ ...config, fontFamily: font.id })}
                   className={`flex flex-col items-center gap-2 rounded-xl border-2 px-4 py-5 transition-all ${
-                    selected
-                      ? "border-primary bg-primary/5 shadow-sm"
-                      : "border-border hover:border-primary/30"
+                    selected ? "border-primary bg-primary/5 shadow-sm" : "border-border hover:border-primary/30"
                   }`}
                 >
-                  <span
-                    className="text-2xl text-foreground"
-                    style={{ fontFamily: getFontStyle(font.id) }}
-                  >
+                  <span className="text-2xl text-foreground" style={{ fontFamily: getFontStyle(font.id) }}>
                     {config.name || "Event Name"}
                   </span>
                   <span className="text-xs text-muted-foreground">{font.label}</span>
@@ -605,13 +584,7 @@ function EventSettingsTab({
 }
 
 // ---- Page Builder Tab ----
-function PageBuilderTab({
-  config,
-  setConfig,
-}: {
-  config: EventConfig
-  setConfig: (c: EventConfig) => void
-}) {
+function PageBuilderTab({ config, setConfig }: { config: EventConfig; setConfig: (c: EventConfig) => void }) {
   const [editingPageId, setEditingPageId] = useState<string | null>(null)
 
   function addPage() {
@@ -619,12 +592,14 @@ function PageBuilderTab({
       id: `page-${Date.now()}`,
       title: "New Page",
       subtitle: "",
-      questions: [{
-        id: `q-${Date.now()}`,
-        type: "text",
-        label: "Your question here",
-        required: true,
-      }],
+      questions: [
+        {
+          id: `q-${Date.now()}`,
+          type: "text",
+          label: "Your question here",
+          required: true,
+        },
+      ],
       backgroundId: "none",
     }
     setConfig({ ...config, pages: [...config.pages, newPage] })
@@ -685,7 +660,15 @@ function PageBuilderTab({
                     className="text-muted-foreground transition-colors hover:text-foreground disabled:opacity-25"
                     aria-label="Move up"
                   >
-                    <svg className="h-3 w-3" viewBox="0 0 10 6" fill="none"><path d="M1 5l4-4 4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    <svg className="h-3 w-3" viewBox="0 0 10 6" fill="none">
+                      <path
+                        d="M1 5l4-4 4 4"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
                   </button>
                   <button
                     type="button"
@@ -694,7 +677,15 @@ function PageBuilderTab({
                     className="text-muted-foreground transition-colors hover:text-foreground disabled:opacity-25"
                     aria-label="Move down"
                   >
-                    <svg className="h-3 w-3" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    <svg className="h-3 w-3" viewBox="0 0 10 6" fill="none">
+                      <path
+                        d="M1 1l4 4 4-4"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
                   </button>
                 </div>
 
@@ -704,9 +695,7 @@ function PageBuilderTab({
                 />
 
                 <div className="flex min-w-0 flex-1 flex-col">
-                  <span className="truncate text-sm font-medium text-foreground">
-                    {page.title}
-                  </span>
+                  <span className="truncate text-sm font-medium text-foreground">{page.title}</span>
                   <span className="truncate text-xs text-muted-foreground">
                     {page.questions.length === 1
                       ? `${page.questions[0].type} - ${page.questions[0].label}`
@@ -718,9 +707,7 @@ function PageBuilderTab({
                   <Button
                     variant="ghost"
                     size="icon-sm"
-                    onClick={() =>
-                      setEditingPageId(editingPageId === page.id ? null : page.id)
-                    }
+                    onClick={() => setEditingPageId(editingPageId === page.id ? null : page.id)}
                   >
                     <Settings className="h-4 w-4" />
                   </Button>
@@ -737,10 +724,7 @@ function PageBuilderTab({
 
               {/* Expanded editor */}
               {editingPageId === page.id && (
-                <PageEditor
-                  page={page}
-                  onChange={(updates) => updatePage(page.id, updates)}
-                />
+                <PageEditor page={page} onChange={(updates) => updatePage(page.id, updates)} eventId={config.id} />
               )}
             </CardContent>
           </Card>
@@ -767,14 +751,14 @@ function PageBuilderTab({
 function PageEditor({
   page,
   onChange,
+  eventId,
 }: {
   page: EventPage
   onChange: (updates: Partial<EventPage>) => void
+  eventId: string
 }) {
   function updateQuestion(qIndex: number, field: string, value: string | string[] | number | boolean) {
-    const newQuestions = page.questions.map((q, i) =>
-      i === qIndex ? { ...q, [field]: value } : q
-    )
+    const newQuestions = page.questions.map((q, i) => (i === qIndex ? { ...q, [field]: value } : q))
     onChange({ questions: newQuestions })
   }
 
@@ -783,7 +767,7 @@ function PageEditor({
     const newQ = {
       ...q,
       type: val,
-      options: val === "single-choice" || val === "multi-choice" ? q.options ?? ["Option 1", "Option 2"] : undefined,
+      options: val === "single-choice" || val === "multi-choice" ? (q.options ?? ["Option 1", "Option 2"]) : undefined,
       min: val === "number" ? 0 : undefined,
       max: val === "number" ? 10 : undefined,
     }
@@ -793,10 +777,7 @@ function PageEditor({
 
   function addQuestion() {
     onChange({
-      questions: [
-        ...page.questions,
-        { id: `q-${Date.now()}`, type: "text", label: "New question", required: true },
-      ],
+      questions: [...page.questions, { id: `q-${Date.now()}`, type: "text", label: "New question", required: true }],
     })
   }
 
@@ -811,11 +792,7 @@ function PageEditor({
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Page Title</Label>
-          <Input
-            value={page.title}
-            onChange={(e) => onChange({ title: e.target.value })}
-            placeholder="Your Name"
-          />
+          <Input value={page.title} onChange={(e) => onChange({ title: e.target.value })} placeholder="Your Name" />
         </div>
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Subtitle</Label>
@@ -863,10 +840,7 @@ function PageEditor({
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="flex flex-col gap-1">
                 <Label className="text-[11px] text-muted-foreground">Type</Label>
-                <Select
-                  value={q.type}
-                  onValueChange={(val: QuestionType) => updateQuestionType(qIndex, val)}
-                >
+                <Select value={q.type} onValueChange={(val: QuestionType) => updateQuestionType(qIndex, val)}>
                   <SelectTrigger className="h-8 w-full text-xs">
                     <SelectValue />
                   </SelectTrigger>
@@ -890,7 +864,9 @@ function PageEditor({
                     role="switch"
                     aria-checked={q.required}
                   >
-                    <span className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${q.required ? "translate-x-4" : "translate-x-0"}`} />
+                    <span
+                      className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${q.required ? "translate-x-4" : "translate-x-0"}`}
+                    />
                   </button>
                   <span className="text-xs text-muted-foreground">{q.required ? "Required" : "Optional"}</span>
                 </div>
@@ -899,10 +875,7 @@ function PageEditor({
 
             {/* Options editor for choice types */}
             {(q.type === "single-choice" || q.type === "multi-choice") && (
-              <OptionsEditor
-                options={q.options ?? []}
-                onChange={(opts) => updateQuestion(qIndex, "options", opts)}
-              />
+              <OptionsEditor options={q.options ?? []} onChange={(opts) => updateQuestion(qIndex, "options", opts)} />
             )}
 
             {/* Min/Max for number type */}
@@ -910,11 +883,21 @@ function PageEditor({
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1">
                   <Label className="text-[11px] text-muted-foreground">Min</Label>
-                  <Input type="number" className="h-8 text-xs" value={q.min ?? 0} onChange={(e) => updateQuestion(qIndex, "min", parseInt(e.target.value) || 0)} />
+                  <Input
+                    type="number"
+                    className="h-8 text-xs"
+                    value={q.min ?? 0}
+                    onChange={(e) => updateQuestion(qIndex, "min", parseInt(e.target.value) || 0)}
+                  />
                 </div>
                 <div className="flex flex-col gap-1">
                   <Label className="text-[11px] text-muted-foreground">Max</Label>
-                  <Input type="number" className="h-8 text-xs" value={q.max ?? 10} onChange={(e) => updateQuestion(qIndex, "max", parseInt(e.target.value) || 10)} />
+                  <Input
+                    type="number"
+                    className="h-8 text-xs"
+                    value={q.max ?? 10}
+                    onChange={(e) => updateQuestion(qIndex, "max", parseInt(e.target.value) || 10)}
+                  />
                 </div>
               </div>
             )}
@@ -958,17 +941,23 @@ function PageEditor({
 
         {/* Custom image URL */}
         <div className="flex flex-col gap-1.5">
-          <Label className="text-[11px] text-muted-foreground">Or paste a custom image URL</Label>
+          <Label className="text-[11px] text-muted-foreground">Or paste / upload a custom image</Label>
           <div className="flex gap-2">
             <Input
               value={page.backgroundImageUrl ?? ""}
               onChange={(e) =>
                 onChange({
                   backgroundImageUrl: e.target.value || undefined,
+                  backgroundId: e.target.value ? "custom" : page.backgroundId,
                 })
               }
               placeholder="https://images.unsplash.com/..."
               className="h-8 flex-1 text-xs"
+            />
+            <PageBackgroundUploadButton
+              eventId={eventId}
+              pageId={page.id}
+              onUploadComplete={(url) => onChange({ backgroundImageUrl: url, backgroundId: "custom" })}
             />
             {page.backgroundImageUrl && (
               <Button
@@ -994,13 +983,7 @@ function PageEditor({
 }
 
 // ---- Options Editor ----
-function OptionsEditor({
-  options,
-  onChange,
-}: {
-  options: string[]
-  onChange: (opts: string[]) => void
-}) {
+function OptionsEditor({ options, onChange }: { options: string[]; onChange: (opts: string[]) => void }) {
   function updateOption(index: number, value: string) {
     const next = [...options]
     next[index] = value
@@ -1019,11 +1002,7 @@ function OptionsEditor({
       {options.map((opt, i) => (
         <div key={i} className="flex items-center gap-2">
           <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground/40" />
-          <Input
-            value={opt}
-            onChange={(e) => updateOption(i, e.target.value)}
-            className="flex-1"
-          />
+          <Input value={opt} onChange={(e) => updateOption(i, e.target.value)} className="flex-1" />
           <Button
             variant="ghost"
             size="icon-sm"
@@ -1044,15 +1023,7 @@ function OptionsEditor({
 }
 
 // ---- Responses Tab ----
-function ResponsesTab({
-  guests,
-  pages,
-  onRefresh,
-}: {
-  guests: Guest[]
-  pages: EventPage[]
-  onRefresh: () => void
-}) {
+function ResponsesTab({ guests, pages, onRefresh }: { guests: Guest[]; pages: EventPage[]; onRefresh: () => void }) {
   const [refreshing, setRefreshing] = useState(false)
 
   async function handleRefresh() {
@@ -1063,9 +1034,7 @@ function ResponsesTab({
 
   // Find the yes-no or attendance question
   const allQuestions = pages.flatMap((p) => p.questions)
-  const attendanceQuestion = allQuestions.find(
-    (q) => q.type === "yes-no" || q.id === "q-attendance"
-  )
+  const attendanceQuestion = allQuestions.find((q) => q.type === "yes-no" || q.id === "q-attendance")
   const attQid = attendanceQuestion?.id
 
   const attendingCount = attQid
@@ -1113,12 +1082,7 @@ function ResponsesTab({
                 : `${guests.length} ${guests.length === 1 ? "response" : "responses"} received`}
             </CardDescription>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleRefresh}
-            disabled={refreshing}
-          >
+          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
             <RefreshCw className={`h-4 w-4 mr-1.5 ${refreshing ? "animate-spin" : ""}`} />
             Refresh
           </Button>
@@ -1150,9 +1114,7 @@ function ResponsesTab({
                 <TableBody>
                   {guests.map((guest) => (
                     <TableRow key={guest.id}>
-                      <TableCell className="font-mono text-xs text-muted-foreground">
-                        {guest.phone}
-                      </TableCell>
+                      <TableCell className="font-mono text-xs text-muted-foreground">{guest.phone}</TableCell>
                       {allQuestions.map((q) => {
                         const val = guest.responses[q.id]
                         return (
@@ -1197,6 +1159,92 @@ function formatResponseValue(val: unknown): string {
   return String(val)
 }
 
+// ---- Hero Upload Button ----
+function HeroUploadButton({
+  mediaType,
+  onUploadComplete,
+}: {
+  mediaType: HeroMediaType
+  onUploadComplete: (url: string, type: HeroMediaType) => void
+}) {
+  const endpoint = (mediaType === "video" ? "heroVideo" : "heroImage") as keyof OurFileRouter
+  const { startUpload, isUploading } = useUploadThing(endpoint, {
+    onClientUploadComplete: (res) => {
+      if (res?.[0]) {
+        const detectedType: HeroMediaType = res[0].type?.startsWith("video/") ? "video" : "image"
+        onUploadComplete(res[0].url, detectedType)
+      }
+    },
+  })
+
+  function handleClick() {
+    const input = document.createElement("input")
+    input.type = "file"
+    input.accept = mediaType === "video" ? "video/mp4,video/*" : "image/*"
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0]
+      if (file) startUpload([file])
+    }
+    input.click()
+  }
+
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      className="gap-1.5 whitespace-nowrap"
+      disabled={isUploading}
+      onClick={handleClick}
+    >
+      {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+      {isUploading ? "Uploading…" : "Upload File"}
+    </Button>
+  )
+}
+
+// ---- Page Background Upload Button ----
+function PageBackgroundUploadButton({
+  eventId: _eventId, // reserved for future per-event scoping
+  pageId: _pageId,
+  onUploadComplete,
+}: {
+  eventId: string
+  pageId: string
+  onUploadComplete: (url: string) => void
+}) {
+  const { startUpload, isUploading } = useUploadThing("pageBackground", {
+    onClientUploadComplete: (res) => {
+      if (res?.[0]) onUploadComplete(res[0].url)
+    },
+  })
+
+  function handleClick() {
+    const input = document.createElement("input")
+    input.type = "file"
+    input.accept = "image/*"
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0]
+      if (file) startUpload([file])
+    }
+    input.click()
+  }
+
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      className="h-8 gap-1.5 whitespace-nowrap text-xs"
+      disabled={isUploading}
+      onClick={handleClick}
+    >
+      {isUploading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
+      {isUploading ? "Uploading…" : "Upload"}
+    </Button>
+  )
+}
+
 function getPageBgPreview(backgroundId: string, imageUrl?: string): React.CSSProperties {
   if (imageUrl) {
     return { backgroundImage: `url(${imageUrl})`, backgroundSize: "cover", backgroundPosition: "center" }
@@ -1204,6 +1252,7 @@ function getPageBgPreview(backgroundId: string, imageUrl?: string): React.CSSPro
   const bg = BACKGROUND_GALLERY.find((b) => b.id === backgroundId)
   if (!bg || bg.type === "none") return { background: "#e5e5e5" }
   if (bg.type === "gradient") return { background: bg.value }
-  if (bg.type === "image") return { backgroundImage: `url(${bg.value})`, backgroundSize: "cover", backgroundPosition: "center" }
+  if (bg.type === "image")
+    return { backgroundImage: `url(${bg.value})`, backgroundSize: "cover", backgroundPosition: "center" }
   return { background: "#e5e5e5" }
 }
