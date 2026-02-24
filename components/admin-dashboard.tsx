@@ -1168,22 +1168,21 @@ function HeroUploadButton({
   onUploadComplete: (url: string, type: HeroMediaType) => void
 }) {
   const endpoint = (mediaType === "video" ? "heroVideo" : "heroImage") as keyof OurFileRouter
-  const { startUpload, isUploading } = useUploadThing(endpoint, {
-    onClientUploadComplete: (res) => {
-      if (res?.[0]) {
-        const detectedType: HeroMediaType = res[0].type?.startsWith("video/") ? "video" : "image"
-        onUploadComplete(res[0].url, detectedType)
-      }
-    },
-  })
+  const { startUpload, isUploading } = useUploadThing(endpoint)
 
   function handleClick() {
     const input = document.createElement("input")
     input.type = "file"
     input.accept = mediaType === "video" ? "video/mp4,video/*" : "image/*"
-    input.onchange = (e) => {
+    input.onchange = async (e) => {
       const file = (e.target as HTMLInputElement).files?.[0]
-      if (file) startUpload([file])
+      if (!file) return
+      const result = await startUpload([file])
+      const uploaded = result?.[0]
+      if (uploaded) {
+        const url = (uploaded.serverData as { url?: string } | null)?.url ?? uploaded.url
+        if (url) onUploadComplete(url, mediaType)
+      }
     }
     input.click()
   }
@@ -1213,19 +1212,21 @@ function PageBackgroundUploadButton({
   pageId: string
   onUploadComplete: (url: string) => void
 }) {
-  const { startUpload, isUploading } = useUploadThing("pageBackground", {
-    onClientUploadComplete: (res) => {
-      if (res?.[0]) onUploadComplete(res[0].url)
-    },
-  })
+  const { startUpload, isUploading } = useUploadThing("pageBackground")
 
   function handleClick() {
     const input = document.createElement("input")
     input.type = "file"
     input.accept = "image/*"
-    input.onchange = (e) => {
+    input.onchange = async (e) => {
       const file = (e.target as HTMLInputElement).files?.[0]
-      if (file) startUpload([file])
+      if (!file) return
+      const result = await startUpload([file])
+      const uploaded = result?.[0]
+      if (uploaded) {
+        const url = (uploaded.serverData as { url?: string } | null)?.url ?? uploaded.url
+        if (url) onUploadComplete(url)
+      }
     }
     input.click()
   }
