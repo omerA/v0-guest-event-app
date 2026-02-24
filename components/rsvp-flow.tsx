@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react"
 import { ArrowLeft, ArrowRight, Send, Check, Loader2, CalendarPlus, Download } from "lucide-react"
-import { googleCalendarUrl, outlookCalendarUrl, generateICSContent, formatEventDate } from "@/lib/date-utils"
+import { googleCalendarUrl, outlookCalendarUrl, generateICSContent } from "@/lib/date-utils"
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp"
 import { QuestionRenderer } from "@/components/question-renderers"
 import type { GuestCountValue } from "@/components/question-renderers"
@@ -23,7 +23,15 @@ interface RsvpFlowProps {
 
 type FlowStep = "phone" | "otp" | "questions" | "complete"
 
-export function RsvpFlow({ eventId, pages, fontClass, eventName, eventDate, eventLocation, eventDescription }: RsvpFlowProps) {
+export function RsvpFlow({
+  eventId,
+  pages,
+  fontClass,
+  eventName,
+  eventDate,
+  eventLocation,
+  eventDescription,
+}: RsvpFlowProps) {
   const [step, setStep] = useState<FlowStep>("phone")
   const [phone, setPhone] = useState("")
   const [otp, setOtp] = useState("")
@@ -33,6 +41,7 @@ export function RsvpFlow({ eventId, pages, fontClass, eventName, eventDate, even
   const [responses, setResponses] = useState<Record<string, ResponseValue>>({})
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  const [isUpdate, setIsUpdate] = useState(false)
 
   const totalPages = pages.length
 
@@ -60,36 +69,49 @@ export function RsvpFlow({ eventId, pages, fontClass, eventName, eventDate, even
     }
   }, [phone])
 
-  const handleVerifyCode = useCallback(async (codeOverride?: string) => {
-    const codeToVerify = codeOverride || otp
-    if (codeToVerify.length < 6) return
-    setLoading(true)
-    setError("")
-    try {
-      const res = await fetch("/api/auth/verify-code", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, code: codeToVerify, eventId }),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        setError(data.error || "Invalid code")
-        return
+  const handleVerifyCode = useCallback(
+    async (codeOverride?: string) => {
+      const codeToVerify = codeOverride || otp
+      if (codeToVerify.length < 6) return
+      setLoading(true)
+      setError("")
+      try {
+        const res = await fetch("/api/auth/verify-code", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ phone, code: codeToVerify, eventId }),
+        })
+        const data = await res.json()
+        if (!res.ok) {
+          setError(data.error || "Invalid code")
+          return
+        }
+        const token = data.sessionId
+        if (token) setSessionToken(token)
+        if (data.alreadyResponded) {
+          setIsUpdate(true)
+          // Pre-populate with existing responses so the attendee can edit
+          const existingRes = await fetch("/api/responses", {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+          if (existingRes.ok) {
+            const existingData = await existingRes.json()
+            if (existingData.guest?.responses) {
+              setResponses(existingData.guest.responses as Record<string, ResponseValue>)
+            }
+          }
+          setStep("questions")
+        } else {
+          setStep("questions")
+        }
+      } catch {
+        setError("Something went wrong. Please try again.")
+      } finally {
+        setLoading(false)
       }
-      if (data.sessionId) {
-        setSessionToken(data.sessionId)
-      }
-      if (data.alreadyResponded) {
-        setStep("complete")
-      } else {
-        setStep("questions")
-      }
-    } catch {
-      setError("Something went wrong. Please try again.")
-    } finally {
-      setLoading(false)
-    }
-  }, [phone, otp])
+    },
+    [phone, otp]
+  )
 
   const handleSubmit = useCallback(async () => {
     setLoading(true)
@@ -99,7 +121,7 @@ export function RsvpFlow({ eventId, pages, fontClass, eventName, eventDate, even
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${sessionToken}`,
+          Authorization: `Bearer ${sessionToken}`,
         },
         body: JSON.stringify({ responses }),
       })
@@ -121,11 +143,7 @@ export function RsvpFlow({ eventId, pages, fontClass, eventName, eventDate, even
   const canProceed = currentQuestions.every((q) => {
     if (!q.required) return true
     const answer = responses[q.id]
-    return (
-      answer !== undefined &&
-      answer !== "" &&
-      !(Array.isArray(answer) && answer.length === 0)
-    )
+    return answer !== undefined && answer !== "" && !(Array.isArray(answer) && answer.length === 0)
   })
 
   function handleNext() {
@@ -187,15 +205,9 @@ export function RsvpFlow({ eventId, pages, fontClass, eventName, eventDate, even
           {step === "phone" && (
             <>
               <div className="flex flex-col items-center gap-3 text-center">
-                <p className="text-sm tracking-[0.2em] font-medium text-white/50 uppercase">
-                  RSVP for
-                </p>
-                <h1 className={`text-3xl font-bold text-white sm:text-4xl text-balance ${fontClass}`}>
-                  {eventName}
-                </h1>
-                <p className="mt-2 text-base text-white/60">
-                  Enter your phone number to get started
-                </p>
+                <p className="text-sm tracking-[0.2em] font-medium text-white/50 uppercase">RSVP for</p>
+                <h1 className={`text-3xl font-bold text-white sm:text-4xl text-balance ${fontClass}`}>{eventName}</h1>
+                <p className="mt-2 text-base text-white/60">Enter your phone number to get started</p>
               </div>
 
               <div className="flex w-full max-w-sm flex-col gap-4">
@@ -224,12 +236,8 @@ export function RsvpFlow({ eventId, pages, fontClass, eventName, eventDate, even
           {step === "otp" && (
             <>
               <div className="flex flex-col items-center gap-3 text-center">
-                <h2 className={`text-2xl font-bold text-white sm:text-3xl ${fontClass}`}>
-                  Enter Your Code
-                </h2>
-                <p className="text-base text-white/60">
-                  {"We sent a 6-digit code to your phone"}
-                </p>
+                <h2 className={`text-2xl font-bold text-white sm:text-3xl ${fontClass}`}>Enter Your Code</h2>
+                <p className="text-base text-white/60">{"We sent a 6-digit code to your phone"}</p>
                 {demoCode && (
                   <div className="mt-2 rounded-xl border border-white/20 bg-white/10 px-5 py-3 backdrop-blur-sm">
                     <p className="text-xs text-white/50">Demo code</p>
@@ -265,7 +273,12 @@ export function RsvpFlow({ eventId, pages, fontClass, eventName, eventDate, even
                   {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : "Verify"}
                 </button>
                 <button
-                  onClick={() => { setStep("phone"); setOtp(""); setError(""); setDemoCode("") }}
+                  onClick={() => {
+                    setStep("phone")
+                    setOtp("")
+                    setError("")
+                    setDemoCode("")
+                  }}
                   className="text-sm text-white/50 transition-colors hover:text-white/80"
                 >
                   Use a different number
@@ -291,9 +304,7 @@ export function RsvpFlow({ eventId, pages, fontClass, eventName, eventDate, even
                   <div key={q.id} className="flex w-full flex-col items-center gap-3">
                     <p className="text-lg text-white/80 text-center">
                       {q.label}
-                      {!q.required && (
-                        <span className="ml-2 text-sm text-white/40">(optional)</span>
-                      )}
+                      {!q.required && <span className="ml-2 text-sm text-white/40">(optional)</span>}
                     </p>
                     <QuestionRenderer
                       question={q}
@@ -319,22 +330,25 @@ export function RsvpFlow({ eventId, pages, fontClass, eventName, eventDate, even
               <div className="flex h-20 w-20 items-center justify-center rounded-full border-2 border-white/30 bg-white/15 backdrop-blur-sm">
                 <Check className="h-10 w-10 text-white" />
               </div>
-              <h2 className={`text-3xl font-bold text-white sm:text-4xl ${fontClass}`}>
-                Thank You
-              </h2>
+              <h2 className={`text-3xl font-bold text-white sm:text-4xl ${fontClass}`}>Thank You</h2>
               <p className="max-w-sm text-base leading-relaxed text-white/70">
-                Your response has been recorded. We look forward to seeing you at the event.
+                {isUpdate
+                  ? "Your response has been updated. We look forward to seeing you at the event."
+                  : "Your response has been recorded. We look forward to seeing you at the event."}
               </p>
 
               {/* Calendar export */}
               {eventDate && (
                 <div className="flex flex-col items-center gap-3 w-full max-w-sm">
-                  <p className="text-xs tracking-[0.15em] font-medium text-white/40 uppercase">
-                    Add to your calendar
-                  </p>
+                  <p className="text-xs tracking-[0.15em] font-medium text-white/40 uppercase">Add to your calendar</p>
                   <div className="flex w-full flex-col gap-2">
                     <a
-                      href={googleCalendarUrl({ title: eventName, date: eventDate, location: eventLocation, description: eventDescription })}
+                      href={googleCalendarUrl({
+                        title: eventName,
+                        date: eventDate,
+                        location: eventLocation,
+                        description: eventDescription,
+                      })}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-medium text-white/80 backdrop-blur-sm transition-all hover:bg-white/10 hover:text-white"
@@ -343,7 +357,12 @@ export function RsvpFlow({ eventId, pages, fontClass, eventName, eventDate, even
                       Google Calendar
                     </a>
                     <a
-                      href={outlookCalendarUrl({ title: eventName, date: eventDate, location: eventLocation, description: eventDescription })}
+                      href={outlookCalendarUrl({
+                        title: eventName,
+                        date: eventDate,
+                        location: eventLocation,
+                        description: eventDescription,
+                      })}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-medium text-white/80 backdrop-blur-sm transition-all hover:bg-white/10 hover:text-white"
@@ -354,7 +373,12 @@ export function RsvpFlow({ eventId, pages, fontClass, eventName, eventDate, even
                     <button
                       type="button"
                       onClick={() => {
-                        const ics = generateICSContent({ title: eventName, date: eventDate, location: eventLocation, description: eventDescription })
+                        const ics = generateICSContent({
+                          title: eventName,
+                          date: eventDate,
+                          location: eventLocation,
+                          description: eventDescription,
+                        })
                         if (!ics) return
                         const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" })
                         const url = URL.createObjectURL(blob)
