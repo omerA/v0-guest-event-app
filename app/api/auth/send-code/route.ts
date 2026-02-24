@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server"
-import { generateOTP, getEventConfig } from "@/lib/store"
+import { getEventConfig } from "@/lib/store"
+import { sendOTP } from "@/lib/otp"
 
 export async function POST(request: Request) {
   try {
     const { phone, eventId } = await request.json()
 
-    if (!eventId || !getEventConfig(eventId)) {
+    if (!eventId || !(await getEventConfig(eventId))) {
       return NextResponse.json({ error: "Invalid event" }, { status: 400 })
     }
 
@@ -18,14 +19,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid phone number" }, { status: 400 })
     }
 
-    const code = generateOTP(digits)
-    console.log(`[OTP] Code for ${digits}: ${code}`)
+    await sendOTP(digits, eventId)
 
-    return NextResponse.json({
-      success: true,
-      message: "Verification code sent",
-      _demo_code: code,
-    })
+    return NextResponse.json({ success: true, message: "Verification code sent" })
   } catch {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }

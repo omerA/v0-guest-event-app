@@ -6,7 +6,7 @@ import { EventDetails } from "@/components/event-details"
 
 export async function generateMetadata({ params }: { params: Promise<{ eventId: string }> }) {
   const { eventId } = await params
-  const config = getEventConfig(eventId)
+  const config = await getEventConfig(eventId)
   if (!config) return { title: "Event Not Found" }
   return {
     title: config.name,
@@ -16,7 +16,7 @@ export async function generateMetadata({ params }: { params: Promise<{ eventId: 
 
 export default async function EventPage({ params }: { params: Promise<{ eventId: string }> }) {
   const { eventId } = await params
-  const config = getEventConfig(eventId)
+  const config = await getEventConfig(eventId)
   if (!config) notFound()
 
   const fontClass = getFontClass(config.fontFamily)

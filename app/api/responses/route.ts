@@ -22,7 +22,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Responses are required" }, { status: 400 })
     }
 
-    const guest = saveGuestResponse(session.eventId, session.phone, responses)
+    const guest = await saveGuestResponse(session.eventId, session.phone, responses)
     return NextResponse.json({ success: true, guest })
   } catch {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
@@ -37,7 +37,7 @@ export async function GET(request: Request) {
     const session = getSessionData(token)
     if (!session) return NextResponse.json({ error: "Invalid session" }, { status: 401 })
 
-    const guest = getGuestByPhone(session.eventId, session.phone)
+    const guest = await getGuestByPhone(session.eventId, session.phone)
     return NextResponse.json({ guest })
   } catch {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
