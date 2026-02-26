@@ -82,6 +82,9 @@
     "vaul": "^1.1.2",
     "zod": "^3.24.1"
   },
+  "engines": {
+    "node": ">=20.9.0"
+  },
   "pnpm": {
     "onlyBuiltDependencies": [
       "@prisma/client",
