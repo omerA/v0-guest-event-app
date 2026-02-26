@@ -8,43 +8,53 @@ datasource db {
 }
 
 model Event {
-  id            String      @id
-  name          String
-  date          String
-  location      String
-  description   String
-  heroMediaUrl  String
-  heroMediaType String
-  fontFamily    String
-  createdAt     DateTime    @default(now())
-  pages         EventPage[]
-  guests        Guest[]
+  id                      String      @id
+  name                    String
+  nameTranslations        Json?
+  date                    String
+  location                String
+  locationTranslations    Json?
+  description             String
+  descriptionTranslations Json?
+  heroMediaUrl            String
+  heroMediaType           String
+  fontFamily              String
+  supportedLanguages      String[]    @default(["en"])
+  defaultLanguage         String      @default("en")
+  createdAt               DateTime    @default(now())
+  pages                   EventPage[]
+  guests                  Guest[]
 }
 
 model EventPage {
-  id                 String     @id
-  eventId            String
-  event              Event      @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  title              String
-  subtitle           String?
-  backgroundId       String
-  backgroundImageUrl String?
-  order              Int
-  questions          Question[]
+  id                   String     @id
+  eventId              String
+  event                Event      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  title                String
+  titleTranslations    Json?
+  subtitle             String?
+  subtitleTranslations Json?
+  backgroundId         String
+  backgroundImageUrl   String?
+  order                Int
+  questions            Question[]
 }
 
 model Question {
-  id          String    @id
-  pageId      String
-  page        EventPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
-  type        String
-  label       String
-  description String?
-  options     Json?
-  min         Int?
-  max         Int?
-  required    Boolean
-  order       Int
+  id                      String    @id
+  pageId                  String
+  page                    EventPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  type                    String
+  label                   String
+  labelTranslations       Json?
+  description             String?
+  descriptionTranslations Json?
+  options                 Json?
+  optionsTranslations     Json?
+  min                     Int?
+  max                     Int?
+  required                Boolean
+  order                   Int
 }
 
 model Guest {
