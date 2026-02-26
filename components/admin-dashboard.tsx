@@ -32,6 +32,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar as CalendarWidget } from "@/components/ui/calendar"
 import type { Guest, EventPage, EventConfig, QuestionType } from "@/lib/store"
 import { BACKGROUND_GALLERY, FONT_OPTIONS } from "@/lib/store"
+import { SUPPORTED_LANGUAGES } from "@/lib/i18n"
 import { getFontStyle } from "@/lib/fonts"
 import { formatEventDateShort } from "@/lib/date-utils"
 import { parseISO, isValid, format } from "date-fns"
@@ -456,6 +457,28 @@ function EventSettingsTab({ config, setConfig }: { config: EventConfig; setConfi
     setConfig({ ...config, [field]: value })
   }
 
+  function updateTranslation(
+    field: "nameTranslations" | "locationTranslations" | "descriptionTranslations",
+    lang: string,
+    value: string
+  ) {
+    const existing = (config[field] as Record<string, string>) ?? {}
+    setConfig({ ...config, [field]: { ...existing, [lang]: value } })
+  }
+
+  function toggleLanguage(code: string) {
+    const current = config.supportedLanguages ?? ["en"]
+    if (code === "en") return // English is always supported
+    const next = current.includes(code) ? current.filter((l) => l !== code) : [...current, code]
+    // If we removed the default language, reset default to "en"
+    const newDefault = next.includes(config.defaultLanguage) ? config.defaultLanguage : "en"
+    setConfig({ ...config, supportedLanguages: next, defaultLanguage: newDefault })
+  }
+
+  const nonDefaultLanguages = (config.supportedLanguages ?? ["en"]).filter(
+    (l) => l !== (config.defaultLanguage ?? "en")
+  )
+
   return (
     <div className="flex flex-col gap-6">
       <Card className="border-0 shadow-sm">
@@ -472,6 +495,22 @@ function EventSettingsTab({ config, setConfig }: { config: EventConfig; setConfi
               onChange={(e) => update("name", e.target.value)}
               placeholder="Annual Gathering 2026"
             />
+            {nonDefaultLanguages.map((lang) => {
+              const langInfo = SUPPORTED_LANGUAGES.find((l) => l.code === lang)
+              return (
+                <div key={lang} className="flex flex-col gap-1">
+                  <Label className="text-[11px] text-muted-foreground">
+                    Event Name in {langInfo?.nativeLabel ?? lang}
+                  </Label>
+                  <Input
+                    dir={langInfo?.rtl ? "rtl" : "ltr"}
+                    value={(config.nameTranslations as Record<string, string>)?.[lang] ?? ""}
+                    onChange={(e) => updateTranslation("nameTranslations", lang, e.target.value)}
+                    placeholder={`Event name in ${langInfo?.nativeLabel ?? lang}...`}
+                  />
+                </div>
+              )
+            })}
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="flex flex-col gap-2 sm:col-span-2">
@@ -486,6 +525,22 @@ function EventSettingsTab({ config, setConfig }: { config: EventConfig; setConfi
                 onChange={(e) => update("location", e.target.value)}
                 placeholder="The Grand Hall"
               />
+              {nonDefaultLanguages.map((lang) => {
+                const langInfo = SUPPORTED_LANGUAGES.find((l) => l.code === lang)
+                return (
+                  <div key={lang} className="flex flex-col gap-1">
+                    <Label className="text-[11px] text-muted-foreground">
+                      Location in {langInfo?.nativeLabel ?? lang}
+                    </Label>
+                    <Input
+                      dir={langInfo?.rtl ? "rtl" : "ltr"}
+                      value={(config.locationTranslations as Record<string, string>)?.[lang] ?? ""}
+                      onChange={(e) => updateTranslation("locationTranslations", lang, e.target.value)}
+                      placeholder={`Location in ${langInfo?.nativeLabel ?? lang}...`}
+                    />
+                  </div>
+                )
+              })}
             </div>
           </div>
           <div className="flex flex-col gap-2">
@@ -498,6 +553,24 @@ function EventSettingsTab({ config, setConfig }: { config: EventConfig; setConfi
               className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none"
               placeholder="Event description..."
             />
+            {nonDefaultLanguages.map((lang) => {
+              const langInfo = SUPPORTED_LANGUAGES.find((l) => l.code === lang)
+              return (
+                <div key={lang} className="flex flex-col gap-1">
+                  <Label className="text-[11px] text-muted-foreground">
+                    Description in {langInfo?.nativeLabel ?? lang}
+                  </Label>
+                  <textarea
+                    dir={langInfo?.rtl ? "rtl" : "ltr"}
+                    value={(config.descriptionTranslations as Record<string, string>)?.[lang] ?? ""}
+                    onChange={(e) => updateTranslation("descriptionTranslations", lang, e.target.value)}
+                    rows={2}
+                    className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] outline-none"
+                    placeholder={`Description in ${langInfo?.nativeLabel ?? lang}...`}
+                  />
+                </div>
+              )
+            })}
           </div>
           <div className="flex flex-col gap-3">
             <Label>Hero Media</Label>
@@ -549,6 +622,78 @@ function EventSettingsTab({ config, setConfig }: { config: EventConfig; setConfi
           </div>
         </CardContent>
       </Card>
+
+      {/* Languages Card */}
+      <Card className="border-0 shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-lg text-foreground">Languages</CardTitle>
+          <CardDescription>Choose which languages guests can use when viewing the invitation and RSVP</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-5">
+          <div className="flex flex-col gap-3">
+            <Label>Supported Languages</Label>
+            <div className="flex flex-wrap gap-3">
+              {SUPPORTED_LANGUAGES.map((lang) => {
+                const isEnabled = (config.supportedLanguages ?? ["en"]).includes(lang.code)
+                const isEnglish = lang.code === "en"
+                return (
+                  <button
+                    key={lang.code}
+                    type="button"
+                    onClick={() => toggleLanguage(lang.code)}
+                    disabled={isEnglish}
+                    className={`flex items-center gap-2 rounded-lg border-2 px-4 py-2.5 text-sm font-medium transition-all ${
+                      isEnabled
+                        ? "border-primary bg-primary/5 text-foreground"
+                        : "border-border text-muted-foreground hover:border-primary/30"
+                    } ${isEnglish ? "cursor-default opacity-70" : ""}`}
+                  >
+                    <span
+                      className={`flex h-4 w-4 items-center justify-center rounded border-2 transition-colors ${
+                        isEnabled ? "border-primary bg-primary" : "border-muted-foreground"
+                      }`}
+                    >
+                      {isEnabled && <Check className="h-2.5 w-2.5 text-primary-foreground" />}
+                    </span>
+                    <span>{lang.nativeLabel}</span>
+                    <span className="text-xs text-muted-foreground">{lang.label}</span>
+                    {lang.rtl && (
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                        RTL
+                      </Badge>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+            <p className="text-xs text-muted-foreground">English is always supported and cannot be removed.</p>
+          </div>
+          {(config.supportedLanguages ?? ["en"]).length > 1 && (
+            <div className="flex flex-col gap-2">
+              <Label>Default Language</Label>
+              <Select
+                value={config.defaultLanguage ?? "en"}
+                onValueChange={(val) => setConfig({ ...config, defaultLanguage: val })}
+              >
+                <SelectTrigger className="w-48">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(config.supportedLanguages ?? ["en"]).map((code) => {
+                    const langInfo = SUPPORTED_LANGUAGES.find((l) => l.code === code)
+                    return (
+                      <SelectItem key={code} value={code}>
+                        {langInfo?.nativeLabel ?? code} ({langInfo?.label ?? code})
+                      </SelectItem>
+                    )
+                  })}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">The default language shown first to guests.</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }
@@ -556,6 +701,9 @@ function EventSettingsTab({ config, setConfig }: { config: EventConfig; setConfi
 // ---- Page Builder Tab ----
 function PageBuilderTab({ config, setConfig }: { config: EventConfig; setConfig: (c: EventConfig) => void }) {
   const [editingPageId, setEditingPageId] = useState<string | null>(null)
+  const nonDefaultLanguages = (config.supportedLanguages ?? ["en"]).filter(
+    (l) => l !== (config.defaultLanguage ?? "en")
+  )
 
   function addPage() {
     const newPage: EventPage = {
@@ -694,7 +842,12 @@ function PageBuilderTab({ config, setConfig }: { config: EventConfig; setConfig:
 
               {/* Expanded editor */}
               {editingPageId === page.id && (
-                <PageEditor page={page} onChange={(updates) => updatePage(page.id, updates)} eventId={config.id} />
+                <PageEditor
+                  page={page}
+                  onChange={(updates) => updatePage(page.id, updates)}
+                  eventId={config.id}
+                  nonDefaultLanguages={nonDefaultLanguages}
+                />
               )}
             </CardContent>
           </Card>
@@ -722,14 +875,46 @@ function PageEditor({
   page,
   onChange,
   eventId: _eventId,
+  nonDefaultLanguages = [],
 }: {
   page: EventPage
   onChange: (updates: Partial<EventPage>) => void
   eventId: string
+  nonDefaultLanguages?: string[]
 }) {
   function updateQuestion(qIndex: number, field: string, value: string | string[] | number | boolean) {
     const newQuestions = page.questions.map((q, i) => (i === qIndex ? { ...q, [field]: value } : q))
     onChange({ questions: newQuestions })
+  }
+
+  function updateQuestionTranslation(
+    qIndex: number,
+    field: "labelTranslations" | "descriptionTranslations",
+    lang: string,
+    value: string
+  ) {
+    const q = page.questions[qIndex]
+    const existing = (q[field] as Record<string, string>) ?? {}
+    const newQuestions = page.questions.map((qq, i) =>
+      i === qIndex ? { ...qq, [field]: { ...existing, [lang]: value } } : qq
+    )
+    onChange({ questions: newQuestions })
+  }
+
+  function updateOptionTranslation(qIndex: number, lang: string, optIdx: number, value: string) {
+    const q = page.questions[qIndex]
+    const existing: Record<string, string[]> = (q.optionsTranslations as Record<string, string[]>) ?? {}
+    const currentLangOpts = existing[lang] ? [...existing[lang]] : [...(q.options ?? [])]
+    currentLangOpts[optIdx] = value
+    const newQuestions = page.questions.map((qq, i) =>
+      i === qIndex ? { ...qq, optionsTranslations: { ...existing, [lang]: currentLangOpts } } : qq
+    )
+    onChange({ questions: newQuestions })
+  }
+
+  function updatePageTranslation(field: "titleTranslations" | "subtitleTranslations", lang: string, value: string) {
+    const existing = (page[field] as Record<string, string>) ?? {}
+    onChange({ [field]: { ...existing, [lang]: value } })
   }
 
   function updateQuestionType(qIndex: number, val: QuestionType) {
@@ -763,6 +948,21 @@ function PageEditor({
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Page Title</Label>
           <Input value={page.title} onChange={(e) => onChange({ title: e.target.value })} placeholder="Your Name" />
+          {nonDefaultLanguages.map((lang) => {
+            const langInfo = SUPPORTED_LANGUAGES.find((l) => l.code === lang)
+            return (
+              <div key={lang} className="flex flex-col gap-0.5">
+                <Label className="text-[10px] text-muted-foreground">Title in {langInfo?.nativeLabel ?? lang}</Label>
+                <Input
+                  dir={langInfo?.rtl ? "rtl" : "ltr"}
+                  className="text-xs"
+                  value={(page.titleTranslations as Record<string, string>)?.[lang] ?? ""}
+                  onChange={(e) => updatePageTranslation("titleTranslations", lang, e.target.value)}
+                  placeholder={`Title in ${langInfo?.nativeLabel ?? lang}...`}
+                />
+              </div>
+            )
+          })}
         </div>
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs">Subtitle</Label>
@@ -771,6 +971,21 @@ function PageEditor({
             onChange={(e) => onChange({ subtitle: e.target.value })}
             placeholder="Let us know who you are"
           />
+          {nonDefaultLanguages.map((lang) => {
+            const langInfo = SUPPORTED_LANGUAGES.find((l) => l.code === lang)
+            return (
+              <div key={lang} className="flex flex-col gap-0.5">
+                <Label className="text-[10px] text-muted-foreground">Subtitle in {langInfo?.nativeLabel ?? lang}</Label>
+                <Input
+                  dir={langInfo?.rtl ? "rtl" : "ltr"}
+                  className="text-xs"
+                  value={(page.subtitleTranslations as Record<string, string>)?.[lang] ?? ""}
+                  onChange={(e) => updatePageTranslation("subtitleTranslations", lang, e.target.value)}
+                  placeholder={`Subtitle in ${langInfo?.nativeLabel ?? lang}...`}
+                />
+              </div>
+            )
+          })}
         </div>
       </div>
 
@@ -787,13 +1002,26 @@ function PageEditor({
         {page.questions.map((q, qIndex) => (
           <div key={q.id} className="flex flex-col gap-3 rounded-xl border border-border/60 bg-muted/30 p-4">
             <div className="flex items-start justify-between gap-2">
-              <div className="flex-1">
+              <div className="flex-1 flex flex-col gap-1">
                 <Input
                   value={q.label}
                   onChange={(e) => updateQuestion(qIndex, "label", e.target.value)}
                   placeholder="What is your full name?"
                   className="text-sm"
                 />
+                {nonDefaultLanguages.map((lang) => {
+                  const langInfo = SUPPORTED_LANGUAGES.find((l) => l.code === lang)
+                  return (
+                    <Input
+                      key={lang}
+                      dir={langInfo?.rtl ? "rtl" : "ltr"}
+                      value={(q.labelTranslations as Record<string, string>)?.[lang] ?? ""}
+                      onChange={(e) => updateQuestionTranslation(qIndex, "labelTranslations", lang, e.target.value)}
+                      placeholder={`Question in ${langInfo?.nativeLabel ?? lang}...`}
+                      className="text-xs text-muted-foreground"
+                    />
+                  )
+                })}
               </div>
               {page.questions.length > 1 && (
                 <Button
@@ -845,7 +1073,33 @@ function PageEditor({
 
             {/* Options editor for choice types */}
             {(q.type === "single-choice" || q.type === "multi-choice") && (
-              <OptionsEditor options={q.options ?? []} onChange={(opts) => updateQuestion(qIndex, "options", opts)} />
+              <>
+                <OptionsEditor options={q.options ?? []} onChange={(opts) => updateQuestion(qIndex, "options", opts)} />
+                {nonDefaultLanguages.map((lang) => {
+                  const langInfo = SUPPORTED_LANGUAGES.find((l) => l.code === lang)
+                  const options = q.options ?? []
+                  const currentTranslations = (q.optionsTranslations as Record<string, string[]>)?.[lang] ?? []
+                  return (
+                    <div key={lang} className="flex flex-col gap-1.5">
+                      <Label className="text-[10px] text-muted-foreground">
+                        Options in {langInfo?.nativeLabel ?? lang}
+                      </Label>
+                      {options.map((opt, optIdx) => (
+                        <div key={optIdx} className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground w-24 truncate">{opt} →</span>
+                          <Input
+                            dir={langInfo?.rtl ? "rtl" : "ltr"}
+                            className="flex-1 text-xs"
+                            value={currentTranslations[optIdx] ?? ""}
+                            onChange={(e) => updateOptionTranslation(qIndex, lang, optIdx, e.target.value)}
+                            placeholder={`${opt} in ${langInfo?.nativeLabel ?? lang}...`}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )
+                })}
+              </>
             )}
 
             {/* Min/Max for number type */}

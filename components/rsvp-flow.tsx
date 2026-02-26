@@ -8,6 +8,9 @@ import { QuestionRenderer } from "@/components/question-renderers"
 import type { GuestCountValue } from "@/components/question-renderers"
 import type { EventPage } from "@/lib/store"
 import { getBackgroundStyle } from "@/lib/backgrounds"
+import { useLanguage } from "@/components/language-provider"
+import { LanguageSwitcher } from "@/components/language-provider"
+import { t, getTranslation } from "@/lib/i18n"
 
 type ResponseValue = string | string[] | number | boolean | GuestCountValue
 
@@ -16,6 +19,7 @@ interface RsvpFlowProps {
   pages: EventPage[]
   fontClass: string
   eventName: string
+  eventNameTranslations?: Record<string, string>
   eventDate: string
   eventLocation: string
   eventDescription: string
@@ -28,6 +32,7 @@ export function RsvpFlow({
   pages,
   fontClass,
   eventName,
+  eventNameTranslations,
   eventDate,
   eventLocation,
   eventDescription,
@@ -43,6 +48,7 @@ export function RsvpFlow({
   const [error, setError] = useState("")
   const [isUpdate, setIsUpdate] = useState(false)
 
+  const { language } = useLanguage()
   const totalPages = pages.length
 
   const handleSendCode = useCallback(async () => {
@@ -57,17 +63,17 @@ export function RsvpFlow({
       })
       const data = await res.json()
       if (!res.ok) {
-        setError(data.error || "Failed to send code")
+        setError(data.error || t(language, "failedToSendCode"))
         return
       }
       if (data._demo_code) setDemoCode(data._demo_code)
       setStep("otp")
     } catch {
-      setError("Something went wrong. Please try again.")
+      setError(t(language, "somethingWentWrong"))
     } finally {
       setLoading(false)
     }
-  }, [phone])
+  }, [phone, language])
 
   const handleVerifyCode = useCallback(
     async (codeOverride?: string) => {
@@ -83,7 +89,7 @@ export function RsvpFlow({
         })
         const data = await res.json()
         if (!res.ok) {
-          setError(data.error || "Invalid code")
+          setError(data.error || t(language, "invalidCode"))
           return
         }
         const token = data.sessionId
@@ -105,12 +111,12 @@ export function RsvpFlow({
           setStep("questions")
         }
       } catch {
-        setError("Something went wrong. Please try again.")
+        setError(t(language, "somethingWentWrong"))
       } finally {
         setLoading(false)
       }
     },
-    [phone, otp]
+    [phone, otp, language]
   )
 
   const handleSubmit = useCallback(async () => {
@@ -127,16 +133,16 @@ export function RsvpFlow({
       })
       const data = await res.json()
       if (!res.ok) {
-        setError(data.error || "Failed to submit")
+        setError(data.error || t(language, "failedToSubmit"))
         return
       }
       setStep("complete")
     } catch {
-      setError("Something went wrong. Please try again.")
+      setError(t(language, "somethingWentWrong"))
     } finally {
       setLoading(false)
     }
-  }, [responses, sessionToken])
+  }, [responses, sessionToken, language])
 
   const currentQuestions = pages[currentPage]?.questions ?? []
 
@@ -174,6 +180,16 @@ export function RsvpFlow({
     return { background: "#1a1a2e" }
   }
 
+  const displayEventName = getTranslation(eventName, eventNameTranslations, language)
+
+  // Get current page title/subtitle in the current language
+  const currentPageTitle = pages[currentPage]
+    ? getTranslation(pages[currentPage].title, pages[currentPage].titleTranslations, language)
+    : ""
+  const currentPageSubtitle = pages[currentPage]?.subtitle
+    ? getTranslation(pages[currentPage].subtitle!, pages[currentPage].subtitleTranslations, language)
+    : undefined
+
   return (
     <div
       className="flex h-dvh w-full flex-col items-center justify-center overflow-hidden transition-all duration-700"
@@ -181,6 +197,11 @@ export function RsvpFlow({
     >
       {/* Dark overlay for readability */}
       <div className="absolute inset-0 bg-black/30" />
+
+      {/* Language Switcher (top right) */}
+      <div className="absolute top-6 end-6 z-20">
+        <LanguageSwitcher />
+      </div>
 
       <div className="relative z-10 flex h-full w-full max-w-xl flex-col items-center justify-between px-6 py-8 sm:py-12">
         {/* Progress indicator */}
@@ -205,9 +226,11 @@ export function RsvpFlow({
           {step === "phone" && (
             <>
               <div className="flex flex-col items-center gap-3 text-center">
-                <p className="text-sm tracking-[0.2em] font-medium text-white/50 uppercase">RSVP for</p>
-                <h1 className={`text-3xl font-bold text-white sm:text-4xl text-balance ${fontClass}`}>{eventName}</h1>
-                <p className="mt-2 text-base text-white/60">Enter your phone number to get started</p>
+                <p className="text-sm tracking-[0.2em] font-medium text-white/50 uppercase">{t(language, "rsvpFor")}</p>
+                <h1 className={`text-3xl font-bold text-white sm:text-4xl text-balance ${fontClass}`}>
+                  {displayEventName}
+                </h1>
+                <p className="mt-2 text-base text-white/60">{t(language, "enterPhonePrompt")}</p>
               </div>
 
               <div className="flex w-full max-w-sm flex-col gap-4">
@@ -226,7 +249,7 @@ export function RsvpFlow({
                   disabled={loading || !phone.trim()}
                   className="flex min-h-[56px] items-center justify-center gap-2 rounded-2xl bg-white px-8 py-4 text-lg font-semibold text-black transition-all hover:bg-white/90 active:scale-[0.97] disabled:opacity-50"
                 >
-                  {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : "Send Code"}
+                  {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : t(language, "sendCode")}
                 </button>
               </div>
             </>
@@ -236,11 +259,13 @@ export function RsvpFlow({
           {step === "otp" && (
             <>
               <div className="flex flex-col items-center gap-3 text-center">
-                <h2 className={`text-2xl font-bold text-white sm:text-3xl ${fontClass}`}>Enter Your Code</h2>
-                <p className="text-base text-white/60">{"We sent a 6-digit code to your phone"}</p>
+                <h2 className={`text-2xl font-bold text-white sm:text-3xl ${fontClass}`}>
+                  {t(language, "enterYourCode")}
+                </h2>
+                <p className="text-base text-white/60">{t(language, "weSentCode")}</p>
                 {demoCode && (
                   <div className="mt-2 rounded-xl border border-white/20 bg-white/10 px-5 py-3 backdrop-blur-sm">
-                    <p className="text-xs text-white/50">Demo code</p>
+                    <p className="text-xs text-white/50">{t(language, "demoCode")}</p>
                     <p className="text-2xl font-bold tracking-[0.3em] text-white">{demoCode}</p>
                   </div>
                 )}
@@ -270,7 +295,7 @@ export function RsvpFlow({
                   disabled={loading || otp.length < 6}
                   className="flex min-h-[56px] w-full max-w-sm items-center justify-center gap-2 rounded-2xl bg-white px-8 py-4 text-lg font-semibold text-black transition-all hover:bg-white/90 active:scale-[0.97] disabled:opacity-50"
                 >
-                  {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : "Verify"}
+                  {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : t(language, "verify")}
                 </button>
                 <button
                   onClick={() => {
@@ -281,7 +306,7 @@ export function RsvpFlow({
                   }}
                   className="text-sm text-white/50 transition-colors hover:text-white/80"
                 >
-                  Use a different number
+                  {t(language, "useDifferentNumber")}
                 </button>
               </div>
             </>
@@ -292,32 +317,34 @@ export function RsvpFlow({
             <>
               <div className="flex flex-col items-center gap-2 text-center">
                 <h2 className={`text-3xl font-bold text-white sm:text-4xl text-balance ${fontClass}`}>
-                  {pages[currentPage].title}
+                  {currentPageTitle}
                 </h2>
-                {pages[currentPage].subtitle && (
-                  <p className="text-base text-white/60">{pages[currentPage].subtitle}</p>
-                )}
+                {currentPageSubtitle && <p className="text-base text-white/60">{currentPageSubtitle}</p>}
               </div>
 
               <div className="flex w-full flex-col items-center gap-6">
-                {currentQuestions.map((q) => (
-                  <div key={q.id} className="flex w-full flex-col items-center gap-3">
-                    <p className="text-lg text-white/80 text-center">
-                      {q.label}
-                      {!q.required && <span className="ml-2 text-sm text-white/40">(optional)</span>}
-                    </p>
-                    <QuestionRenderer
-                      question={q}
-                      value={responses[q.id]}
-                      onChange={(val) =>
-                        setResponses((prev) => ({
-                          ...prev,
-                          [q.id]: val,
-                        }))
-                      }
-                    />
-                  </div>
-                ))}
+                {currentQuestions.map((q) => {
+                  const questionLabel = getTranslation(q.label, q.labelTranslations, language)
+                  return (
+                    <div key={q.id} className="flex w-full flex-col items-center gap-3">
+                      <p className="text-lg text-white/80 text-center">
+                        {questionLabel}
+                        {!q.required && <span className="ml-2 text-sm text-white/40">{t(language, "optional")}</span>}
+                      </p>
+                      <QuestionRenderer
+                        question={q}
+                        value={responses[q.id]}
+                        language={language}
+                        onChange={(val) =>
+                          setResponses((prev) => ({
+                            ...prev,
+                            [q.id]: val,
+                          }))
+                        }
+                      />
+                    </div>
+                  )
+                })}
               </div>
 
               {error && <p className="text-center text-sm text-red-300">{error}</p>}
@@ -330,17 +357,17 @@ export function RsvpFlow({
               <div className="flex h-20 w-20 items-center justify-center rounded-full border-2 border-white/30 bg-white/15 backdrop-blur-sm">
                 <Check className="h-10 w-10 text-white" />
               </div>
-              <h2 className={`text-3xl font-bold text-white sm:text-4xl ${fontClass}`}>Thank You</h2>
+              <h2 className={`text-3xl font-bold text-white sm:text-4xl ${fontClass}`}>{t(language, "thankYou")}</h2>
               <p className="max-w-sm text-base leading-relaxed text-white/70">
-                {isUpdate
-                  ? "Your response has been updated. We look forward to seeing you at the event."
-                  : "Your response has been recorded. We look forward to seeing you at the event."}
+                {isUpdate ? t(language, "responseUpdated") : t(language, "responseRecorded")}
               </p>
 
               {/* Calendar export */}
               {eventDate && (
                 <div className="flex flex-col items-center gap-3 w-full max-w-sm">
-                  <p className="text-xs tracking-[0.15em] font-medium text-white/40 uppercase">Add to your calendar</p>
+                  <p className="text-xs tracking-[0.15em] font-medium text-white/40 uppercase">
+                    {t(language, "addToCalendar")}
+                  </p>
                   <div className="flex w-full flex-col gap-2">
                     <a
                       href={googleCalendarUrl({
@@ -354,7 +381,7 @@ export function RsvpFlow({
                       className="flex items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-medium text-white/80 backdrop-blur-sm transition-all hover:bg-white/10 hover:text-white"
                     >
                       <CalendarPlus className="h-4 w-4" />
-                      Google Calendar
+                      {t(language, "googleCalendar")}
                     </a>
                     <a
                       href={outlookCalendarUrl({
@@ -368,7 +395,7 @@ export function RsvpFlow({
                       className="flex items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-medium text-white/80 backdrop-blur-sm transition-all hover:bg-white/10 hover:text-white"
                     >
                       <CalendarPlus className="h-4 w-4" />
-                      Outlook Calendar
+                      {t(language, "outlookCalendar")}
                     </a>
                     <button
                       type="button"
@@ -391,7 +418,7 @@ export function RsvpFlow({
                       className="flex items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/5 px-5 py-3 text-sm font-medium text-white/80 backdrop-blur-sm transition-all hover:bg-white/10 hover:text-white"
                     >
                       <Download className="h-4 w-4" />
-                      Apple Calendar (.ics)
+                      {t(language, "appleCalendar")}
                     </button>
                   </div>
                 </div>
@@ -401,7 +428,7 @@ export function RsvpFlow({
                 href={`/event/${eventId}`}
                 className="mt-2 inline-flex items-center justify-center rounded-2xl border-2 border-white/20 bg-white/10 px-8 py-4 text-lg font-medium text-white backdrop-blur-sm transition-all hover:bg-white/20"
               >
-                Back to Event
+                {t(language, "backToEvent")}
               </a>
             </div>
           )}
@@ -415,8 +442,8 @@ export function RsvpFlow({
               disabled={currentPage === 0}
               className="flex h-14 items-center gap-2 rounded-2xl border-2 border-white/15 bg-white/5 px-6 text-base font-medium text-white backdrop-blur-sm transition-all hover:border-white/30 hover:bg-white/10 active:scale-[0.97] disabled:opacity-0 disabled:pointer-events-none"
             >
-              <ArrowLeft className="h-5 w-5" />
-              Back
+              <ArrowLeft className="h-5 w-5 rtl-flip" />
+              {t(language, "back")}
             </button>
 
             {currentPage < totalPages - 1 ? (
@@ -425,8 +452,8 @@ export function RsvpFlow({
                 disabled={!canProceed}
                 className="flex h-14 items-center gap-2 rounded-2xl bg-white px-8 text-base font-semibold text-black transition-all hover:bg-white/90 active:scale-[0.97] disabled:opacity-40"
               >
-                Next
-                <ArrowRight className="h-5 w-5" />
+                {t(language, "next")}
+                <ArrowRight className="h-5 w-5 rtl-flip" />
               </button>
             ) : (
               <button
@@ -438,7 +465,7 @@ export function RsvpFlow({
                   <Loader2 className="h-5 w-5 animate-spin" />
                 ) : (
                   <>
-                    Submit
+                    {t(language, "submit")}
                     <Send className="h-5 w-5" />
                   </>
                 )}

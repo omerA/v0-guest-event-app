@@ -27,6 +27,7 @@ export default async function RsvpPage({ params }: { params: Promise<{ eventId: 
         pages={config.pages}
         fontClass={fontClass}
         eventName={config.name}
+        eventNameTranslations={config.nameTranslations}
         eventDate={config.date}
         eventLocation={config.location}
         eventDescription={config.description}

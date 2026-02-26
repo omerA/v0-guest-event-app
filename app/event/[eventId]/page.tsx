@@ -26,9 +26,12 @@ export default async function EventPage({ params }: { params: Promise<{ eventId:
       <VideoHero
         eventId={config.id}
         eventName={config.name}
+        eventNameTranslations={config.nameTranslations}
         eventDate={config.date}
         eventLocation={config.location}
+        eventLocationTranslations={config.locationTranslations}
         eventDescription={config.description}
+        eventDescriptionTranslations={config.descriptionTranslations}
         mediaUrl={config.heroMediaUrl}
         mediaType={config.heroMediaType}
         fontClass={fontClass}
@@ -38,7 +41,9 @@ export default async function EventPage({ params }: { params: Promise<{ eventId:
         eventName={config.name}
         eventDate={config.date}
         eventLocation={config.location}
+        eventLocationTranslations={config.locationTranslations}
         eventDescription={config.description}
+        eventDescriptionTranslations={config.descriptionTranslations}
         fontClass={fontClass}
       />
     </main>
