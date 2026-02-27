@@ -29,7 +29,8 @@ export async function POST(request: Request) {
       alreadyResponded,
       sessionId,
     })
-  } catch {
+  } catch (error) {
+    console.error("[verify-code]", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
