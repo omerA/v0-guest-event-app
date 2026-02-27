@@ -236,6 +236,7 @@ export function RsvpFlow({
               <div className="flex w-full max-w-sm flex-col gap-4">
                 <input
                   type="tel"
+                  dir="ltr"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   placeholder="+1 (555) 000-0000"
@@ -271,7 +272,7 @@ export function RsvpFlow({
                 )}
               </div>
 
-              <div className="flex flex-col items-center gap-4">
+              <div className="flex flex-col items-center gap-4" dir="ltr">
                 <InputOTP
                   maxLength={6}
                   value={otp}
