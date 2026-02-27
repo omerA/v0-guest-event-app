@@ -22,7 +22,8 @@ export async function POST(request: Request) {
     await sendOTP(digits)
 
     return NextResponse.json({ success: true, message: "Verification code sent" })
-  } catch {
+  } catch (error) {
+    console.error("[send-code]", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
