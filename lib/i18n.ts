@@ -57,6 +57,7 @@ const uiTranslations: Record<string, Record<string, string>> = {
     days: "Days",
     hours: "Hours",
     min: "Min",
+    sec: "Sec",
     // Event Details
     eventDetails: "Event Details",
     everythingYouNeedToKnow: "Everything You Need to Know",
@@ -119,6 +120,7 @@ const uiTranslations: Record<string, Record<string, string>> = {
     days: "ימים",
     hours: "שעות",
     min: "דק'",
+    sec: "שנ'",
     // Event Details
     eventDetails: "פרטי האירוע",
     everythingYouNeedToKnow: "כל מה שצריך לדעת",

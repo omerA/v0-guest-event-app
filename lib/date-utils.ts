@@ -7,6 +7,7 @@ import {
   differenceInDays,
   differenceInHours,
   differenceInMinutes,
+  differenceInSeconds,
   type Locale,
 } from "date-fns"
 import { he } from "date-fns/locale"
@@ -60,6 +61,7 @@ export interface CountdownInfo {
   days: number
   hours: number
   minutes: number
+  seconds: number
 }
 
 export function getCountdown(iso: string): CountdownInfo | null {
@@ -68,17 +70,18 @@ export function getCountdown(iso: string): CountdownInfo | null {
   if (!isValid(d)) return null
 
   if (isPast(d)) {
-    return { isPast: true, label: "Event has passed", days: 0, hours: 0, minutes: 0 }
+    return { isPast: true, label: "Event has passed", days: 0, hours: 0, minutes: 0, seconds: 0 }
   }
 
   const now = new Date()
   const days = differenceInDays(d, now)
   const hours = differenceInHours(d, now) % 24
   const minutes = differenceInMinutes(d, now) % 60
+  const seconds = differenceInSeconds(d, now) % 60
 
   const label = formatDistanceToNowStrict(d, { addSuffix: true })
 
-  return { isPast: false, label, days, hours, minutes }
+  return { isPast: false, label, days, hours, minutes, seconds }
 }
 
 /**
