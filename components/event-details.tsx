@@ -45,7 +45,7 @@ export function EventDetails({
           <DetailCard
             icon={<CalendarDays className="h-6 w-6" />}
             title={t(language, "date")}
-            value={formatEventDate(eventDate)}
+            value={formatEventDate(eventDate, language)}
           />
           {/* Venue card with map links */}
           <div className="flex flex-col items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-6 py-8 backdrop-blur-sm">
@@ -66,7 +66,7 @@ export function EventDetails({
           <DetailCard
             icon={<Clock className="h-6 w-6" />}
             title={t(language, "time")}
-            value={formatEventTime(eventDate)}
+            value={formatEventTime(eventDate, language)}
           />
           <DetailCard icon={<Users className="h-6 w-6" />} title={t(language, "dresscode")} value="Semi-formal" />
         </div>
