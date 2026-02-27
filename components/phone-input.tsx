@@ -8,13 +8,17 @@ import { COUNTRIES, DEFAULT_COUNTRY, type Country } from "@/lib/countries"
 interface PhoneInputProps {
   onChange: (fullPhone: string) => void
   onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void
+  language?: string
 }
 
-export function PhoneInput({ onChange, onKeyDown }: PhoneInputProps) {
+export function PhoneInput({ onChange, onKeyDown, language = "en" }: PhoneInputProps) {
   const [country, setCountry] = useState<Country>(DEFAULT_COUNTRY)
   const [localNumber, setLocalNumber] = useState("")
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState("")
+
+  // US always pinned; Israel pinned when language is Hebrew
+  const pinnedCodes = language === "he" ? ["US", "IL"] : ["US"]
 
   // Detect country from IP on mount — no permissions needed, silent fallback
   useEffect(() => {
@@ -34,13 +38,17 @@ export function PhoneInput({ onChange, onKeyDown }: PhoneInputProps) {
     if (!isOpen) setSearch("")
   }
 
-  const filtered = useMemo(() => {
+  const { pinned, rest } = useMemo(() => {
     const q = search.toLowerCase()
-    if (!q) return COUNTRIES
-    return COUNTRIES.filter(
-      (c) => c.name.toLowerCase().includes(q) || c.dialCode.includes(q) || c.code.toLowerCase().includes(q)
-    )
-  }, [search])
+    const pool = q
+      ? COUNTRIES.filter(
+          (c) => c.name.toLowerCase().includes(q) || c.dialCode.includes(q) || c.code.toLowerCase().includes(q)
+        )
+      : COUNTRIES
+    const pinned = pinnedCodes.map((code) => pool.find((c) => c.code === code)).filter(Boolean) as Country[]
+    const rest = pool.filter((c) => !pinnedCodes.includes(c.code))
+    return { pinned, rest }
+  }, [search, pinnedCodes])
 
   function selectCountry(c: Country) {
     setCountry(c)
@@ -101,33 +109,25 @@ export function PhoneInput({ onChange, onKeyDown }: PhoneInputProps) {
 
             {/* Country list */}
             <div className="max-h-56 overflow-y-auto overscroll-contain py-1">
-              {filtered.length === 0 ? (
+              {pinned.length === 0 && rest.length === 0 ? (
                 <p className="px-4 py-3 text-sm text-white/40">No countries found</p>
               ) : (
-                filtered.map((c) => {
-                  const isActive = c.code === country.code
-                  return (
-                    <button
-                      key={c.code}
-                      type="button"
-                      onClick={() => selectCountry(c)}
-                      className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm transition-colors hover:bg-white/10 ${
-                        isActive ? "bg-white/10 text-white" : "text-white/75"
-                      }`}
-                    >
-                      <span className="text-base leading-none">{c.flag}</span>
-                      <span className="flex-1">{c.name}</span>
-                      <span className="shrink-0 tabular-nums text-white/40">{c.dialCode}</span>
-                    </button>
-                  )
-                })
+                <>
+                  {pinned.map((c) => (
+                    <CountryRow key={c.code} c={c} isActive={c.code === country.code} onSelect={selectCountry} />
+                  ))}
+                  {pinned.length > 0 && rest.length > 0 && <div className="mx-3 my-1 border-t border-white/10" />}
+                  {rest.map((c) => (
+                    <CountryRow key={c.code} c={c} isActive={c.code === country.code} onSelect={selectCountry} />
+                  ))}
+                </>
               )}
             </div>
           </PopoverPrimitive.Content>
         </PopoverPrimitive.Portal>
       </PopoverPrimitive.Root>
 
-      {/* Local number input */}
+      {/* Phone number input */}
       <input
         type="tel"
         dir="ltr"
@@ -139,5 +139,21 @@ export function PhoneInput({ onChange, onKeyDown }: PhoneInputProps) {
         autoComplete="tel-national"
       />
     </div>
+  )
+}
+
+function CountryRow({ c, isActive, onSelect }: { c: Country; isActive: boolean; onSelect: (c: Country) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(c)}
+      className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm transition-colors hover:bg-white/10 ${
+        isActive ? "bg-white/10 text-white" : "text-white/75"
+      }`}
+    >
+      <span className="text-base leading-none">{c.flag}</span>
+      <span className="flex-1">{c.name}</span>
+      <span className="shrink-0 tabular-nums text-white/40">{c.dialCode}</span>
+    </button>
   )
 }

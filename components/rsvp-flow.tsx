@@ -235,7 +235,11 @@ export function RsvpFlow({
               </div>
 
               <div className="flex w-full max-w-sm flex-col gap-4">
-                <PhoneInput onChange={setPhone} onKeyDown={(e) => e.key === "Enter" && handleSendCode()} />
+                <PhoneInput
+                  onChange={setPhone}
+                  onKeyDown={(e) => e.key === "Enter" && handleSendCode()}
+                  language={language}
+                />
                 {error && <p className="text-center text-sm text-red-300">{error}</p>}
                 <button
                   onClick={handleSendCode}
