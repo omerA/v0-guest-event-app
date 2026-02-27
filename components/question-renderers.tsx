@@ -250,7 +250,7 @@ function NumberRenderer({
           <Plus className="h-6 w-6" />
         </button>
       </div>
-      <p className="text-sm text-white/40">
+      <p className="text-sm text-white/40" dir="ltr">
         {min} - {max} {t(language, "guests")}
       </p>
     </div>
@@ -339,7 +339,9 @@ function GuestCountRenderer({
             </div>
             <div>
               <p className="text-lg font-medium text-white">{t(language, labelKey)}</p>
-              <p className="text-sm text-white/45">{t(language, sublabelKey)}</p>
+              <p className="text-sm text-white/45" dir="ltr">
+                {t(language, sublabelKey)}
+              </p>
             </div>
           </div>
 

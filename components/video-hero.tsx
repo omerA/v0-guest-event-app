@@ -93,7 +93,7 @@ export function VideoHero({
       <div className="absolute inset-0 bg-black/55" />
 
       {/* Language Switcher (top right) */}
-      <div className="absolute top-6 end-6 z-20">
+      <div className="absolute top-6 right-6 z-20">
         <LanguageSwitcher />
       </div>
 
@@ -108,7 +108,7 @@ export function VideoHero({
         </h1>
 
         <div className="flex flex-col items-center gap-1 text-lg text-white/80">
-          <span>{formatEventDate(eventDate)}</span>
+          <span>{formatEventDate(eventDate, language)}</span>
           <span className="text-white/50">|</span>
           <span>{displayLocation}</span>
         </div>

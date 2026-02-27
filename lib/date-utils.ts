@@ -1,25 +1,42 @@
-import { format, formatDistanceToNowStrict, isPast, isValid, parseISO, differenceInDays, differenceInHours, differenceInMinutes } from "date-fns"
+import {
+  format,
+  formatDistanceToNowStrict,
+  isPast,
+  isValid,
+  parseISO,
+  differenceInDays,
+  differenceInHours,
+  differenceInMinutes,
+} from "date-fns"
+import { he } from "date-fns/locale"
+
+const DATE_FNS_LOCALES: Record<string, Locale> = { he }
 
 /**
- * Format an ISO date string for display.
- * e.g. "Saturday, April 18, 2026"
+ * Format an ISO date string for display, localized to the given language.
+ * e.g. "Saturday, April 18, 2026" (en) or "שבת, 18 אפריל 2026" (he)
  */
-export function formatEventDate(iso: string): string {
+export function formatEventDate(iso: string, lang = "en"): string {
   if (!iso) return "Date TBD"
   const d = parseISO(iso)
   if (!isValid(d)) return "Date TBD"
+  const locale = DATE_FNS_LOCALES[lang]
+  if (locale) {
+    return format(d, "EEEE, d MMMM yyyy", { locale })
+  }
   return format(d, "EEEE, MMMM d, yyyy")
 }
 
 /**
- * Format the time portion.
- * e.g. "7:00 PM"
+ * Format the time portion, localized to the given language.
+ * Hebrew uses 24h clock; English uses 12h AM/PM.
+ * e.g. "7:00 PM" (en) or "19:00" (he)
  */
-export function formatEventTime(iso: string): string {
+export function formatEventTime(iso: string, lang = "en"): string {
   if (!iso) return "Time TBD"
   const d = parseISO(iso)
   if (!isValid(d)) return "Time TBD"
-  return format(d, "h:mm a")
+  return lang === "he" ? format(d, "HH:mm") : format(d, "h:mm a")
 }
 
 /**
@@ -66,7 +83,12 @@ export function getCountdown(iso: string): CountdownInfo | null {
 /**
  * Build Google Calendar URL.
  */
-export function googleCalendarUrl(opts: { title: string; date: string; location: string; description: string }): string {
+export function googleCalendarUrl(opts: {
+  title: string
+  date: string
+  location: string
+  description: string
+}): string {
   const d = parseISO(opts.date)
   if (!isValid(d)) return "#"
   // Google format: 20260418T190000/20260418T220000
@@ -87,7 +109,12 @@ export function googleCalendarUrl(opts: { title: string; date: string; location:
 /**
  * Build Outlook.com Calendar URL.
  */
-export function outlookCalendarUrl(opts: { title: string; date: string; location: string; description: string }): string {
+export function outlookCalendarUrl(opts: {
+  title: string
+  date: string
+  location: string
+  description: string
+}): string {
   const d = parseISO(opts.date)
   if (!isValid(d)) return "#"
   const startStr = d.toISOString()
@@ -108,7 +135,12 @@ export function outlookCalendarUrl(opts: { title: string; date: string; location
 /**
  * Generate .ics file content for Apple Calendar / other apps.
  */
-export function generateICSContent(opts: { title: string; date: string; location: string; description: string }): string {
+export function generateICSContent(opts: {
+  title: string
+  date: string
+  location: string
+  description: string
+}): string {
   const d = parseISO(opts.date)
   if (!isValid(d)) return ""
   const startStr = format(d, "yyyyMMdd'T'HHmmss")

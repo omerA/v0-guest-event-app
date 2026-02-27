@@ -199,7 +199,7 @@ export function RsvpFlow({
       <div className="absolute inset-0 bg-black/30" />
 
       {/* Language Switcher (top right) */}
-      <div className="absolute top-6 end-6 z-20">
+      <div className="absolute top-6 right-6 z-20">
         <LanguageSwitcher />
       </div>
 
