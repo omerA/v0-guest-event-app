@@ -7,6 +7,7 @@ import {
   differenceInDays,
   differenceInHours,
   differenceInMinutes,
+  type Locale,
 } from "date-fns"
 import { he } from "date-fns/locale"
 
