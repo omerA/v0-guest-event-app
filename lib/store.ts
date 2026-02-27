@@ -14,8 +14,11 @@ export interface Question {
   id: string
   type: QuestionType
   label: string
+  labelTranslations?: Record<string, string>
   description?: string
+  descriptionTranslations?: Record<string, string>
   options?: string[]
+  optionsTranslations?: Record<string, string[]>
   min?: number
   max?: number
   required: boolean
@@ -24,7 +27,9 @@ export interface Question {
 export interface EventPage {
   id: string
   title: string
+  titleTranslations?: Record<string, string>
   subtitle?: string
+  subtitleTranslations?: Record<string, string>
   questions: Question[]
   backgroundId: string
   backgroundImageUrl?: string
@@ -35,12 +40,17 @@ export type HeroMediaType = "video" | "image"
 export interface EventConfig {
   id: string
   name: string
+  nameTranslations?: Record<string, string>
   date: string
   location: string
+  locationTranslations?: Record<string, string>
   description: string
+  descriptionTranslations?: Record<string, string>
   heroMediaUrl: string
   heroMediaType: HeroMediaType
   fontFamily: FontFamily
+  supportedLanguages: string[]
+  defaultLanguage: string
   pages: EventPage[]
   createdAt: string
 }
@@ -202,8 +212,11 @@ type PrismaQuestion = {
   id: string
   type: string
   label: string
+  labelTranslations: unknown
   description: string | null
+  descriptionTranslations: unknown
   options: unknown
+  optionsTranslations: unknown
   min: number | null
   max: number | null
   required: boolean
@@ -214,7 +227,9 @@ type PrismaQuestion = {
 type PrismaPage = {
   id: string
   title: string
+  titleTranslations: unknown
   subtitle: string | null
+  subtitleTranslations: unknown
   backgroundId: string
   backgroundImageUrl: string | null
   order: number
@@ -233,14 +248,33 @@ type PrismaGuest = {
 type PrismaEvent = {
   id: string
   name: string
+  nameTranslations: unknown
   date: string
   location: string
+  locationTranslations: unknown
   description: string
+  descriptionTranslations: unknown
   heroMediaUrl: string
   heroMediaType: string
   fontFamily: string
+  supportedLanguages: string[]
+  defaultLanguage: string
   createdAt: Date
   pages: PrismaPage[]
+}
+
+function asTranslationMap(val: unknown): Record<string, string> | undefined {
+  if (val && typeof val === "object" && !Array.isArray(val)) {
+    return val as Record<string, string>
+  }
+  return undefined
+}
+
+function asOptionsTranslationMap(val: unknown): Record<string, string[]> | undefined {
+  if (val && typeof val === "object" && !Array.isArray(val)) {
+    return val as Record<string, string[]>
+  }
+  return undefined
 }
 
 function mapQuestion(q: PrismaQuestion): Question {
@@ -248,8 +282,11 @@ function mapQuestion(q: PrismaQuestion): Question {
     id: q.id,
     type: q.type as QuestionType,
     label: q.label,
+    labelTranslations: asTranslationMap(q.labelTranslations),
     description: q.description ?? undefined,
+    descriptionTranslations: asTranslationMap(q.descriptionTranslations),
     options: Array.isArray(q.options) ? (q.options as string[]) : undefined,
+    optionsTranslations: asOptionsTranslationMap(q.optionsTranslations),
     min: q.min ?? undefined,
     max: q.max ?? undefined,
     required: q.required,
@@ -260,7 +297,9 @@ function mapPage(p: PrismaPage): EventPage {
   return {
     id: p.id,
     title: p.title,
+    titleTranslations: asTranslationMap(p.titleTranslations),
     subtitle: p.subtitle ?? undefined,
+    subtitleTranslations: asTranslationMap(p.subtitleTranslations),
     backgroundId: p.backgroundId,
     backgroundImageUrl: p.backgroundImageUrl ?? undefined,
     questions: [...p.questions].sort((a, b) => a.order - b.order).map(mapQuestion),
@@ -271,12 +310,17 @@ function mapEvent(e: PrismaEvent): EventConfig {
   return {
     id: e.id,
     name: e.name,
+    nameTranslations: asTranslationMap(e.nameTranslations),
     date: e.date,
     location: e.location,
+    locationTranslations: asTranslationMap(e.locationTranslations),
     description: e.description,
+    descriptionTranslations: asTranslationMap(e.descriptionTranslations),
     heroMediaUrl: e.heroMediaUrl,
     heroMediaType: e.heroMediaType as HeroMediaType,
     fontFamily: e.fontFamily as FontFamily,
+    supportedLanguages: e.supportedLanguages ?? ["en"],
+    defaultLanguage: e.defaultLanguage ?? "en",
     createdAt: e.createdAt.toISOString(),
     pages: [...e.pages].sort((a, b) => a.order - b.order).map(mapPage),
   }
@@ -382,12 +426,23 @@ export async function updateEventConfig(eventId: string, updates: Partial<EventC
       where: { id: eventId },
       data: {
         ...(scalarUpdates.name !== undefined && { name: scalarUpdates.name }),
+        ...(scalarUpdates.nameTranslations !== undefined && {
+          nameTranslations: scalarUpdates.nameTranslations ?? undefined,
+        }),
         ...(scalarUpdates.date !== undefined && { date: scalarUpdates.date }),
         ...(scalarUpdates.location !== undefined && { location: scalarUpdates.location }),
+        ...(scalarUpdates.locationTranslations !== undefined && {
+          locationTranslations: scalarUpdates.locationTranslations ?? undefined,
+        }),
         ...(scalarUpdates.description !== undefined && { description: scalarUpdates.description }),
+        ...(scalarUpdates.descriptionTranslations !== undefined && {
+          descriptionTranslations: scalarUpdates.descriptionTranslations ?? undefined,
+        }),
         ...(scalarUpdates.heroMediaUrl !== undefined && { heroMediaUrl: scalarUpdates.heroMediaUrl }),
         ...(scalarUpdates.heroMediaType !== undefined && { heroMediaType: scalarUpdates.heroMediaType }),
         ...(scalarUpdates.fontFamily !== undefined && { fontFamily: scalarUpdates.fontFamily }),
+        ...(scalarUpdates.supportedLanguages !== undefined && { supportedLanguages: scalarUpdates.supportedLanguages }),
+        ...(scalarUpdates.defaultLanguage !== undefined && { defaultLanguage: scalarUpdates.defaultLanguage }),
       },
     })
 
@@ -402,7 +457,9 @@ export async function updateEventConfig(eventId: string, updates: Partial<EventC
             id: page.id,
             eventId,
             title: page.title,
+            titleTranslations: page.titleTranslations ?? undefined,
             subtitle: page.subtitle ?? null,
+            subtitleTranslations: page.subtitleTranslations ?? undefined,
             backgroundId: page.backgroundId,
             backgroundImageUrl: page.backgroundImageUrl ?? null,
             order: pi,
@@ -411,8 +468,11 @@ export async function updateEventConfig(eventId: string, updates: Partial<EventC
                 id: q.id,
                 type: q.type,
                 label: q.label,
+                labelTranslations: q.labelTranslations ?? undefined,
                 description: q.description ?? null,
+                descriptionTranslations: q.descriptionTranslations ?? undefined,
                 options: q.options ?? undefined,
+                optionsTranslations: q.optionsTranslations ?? undefined,
                 min: q.min ?? null,
                 max: q.max ?? null,
                 required: q.required,
