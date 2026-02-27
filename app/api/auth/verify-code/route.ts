@@ -15,7 +15,7 @@ export async function POST(request: Request) {
     }
 
     const digits = phone.replace(/\D/g, "")
-    const isValid = await verifyOTP(digits, eventId, code)
+    const isValid = await verifyOTP(digits, code)
 
     if (!isValid) {
       return NextResponse.json({ error: "Invalid or expired code" }, { status: 401 })

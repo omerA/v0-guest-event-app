@@ -1,6 +1,4 @@
-import { createHash, randomInt } from "crypto"
 import twilio from "twilio"
-import { db } from "./db"
 
 function getTwilioClient() {
   const accountSid = process.env.TWILIO_ACCOUNT_SID
@@ -11,54 +9,22 @@ function getTwilioClient() {
   return twilio(accountSid, authToken)
 }
 
-function hashCode(code: string): string {
-  return createHash("sha256").update(code).digest("hex")
+function getVerifyServiceSid(): string {
+  const serviceSid = process.env.TWILIO_VERIFY_SERVICE_SID
+  if (!serviceSid) throw new Error("TWILIO_VERIFY_SERVICE_SID environment variable is required")
+  return serviceSid
 }
 
-export async function sendOTP(phone: string, eventId: string): Promise<void> {
-  const code = String(randomInt(100000, 1000000))
-  const codeHash = hashCode(code)
-  const expiresAt = new Date(Date.now() + 5 * 60 * 1000) // 5 minutes
-
-  // Invalidate any prior unused codes for this phone + event
-  await db.otpCode.updateMany({
-    where: { phone, eventId, used: false },
-    data: { used: true },
-  })
-
-  await db.otpCode.create({
-    data: { phone, eventId, codeHash, expiresAt },
-  })
-
-  const from = process.env.TWILIO_PHONE_NUMBER
-  if (!from) throw new Error("TWILIO_PHONE_NUMBER environment variable is required")
-
-  await getTwilioClient().messages.create({
-    body: `Your verification code is ${code}. It expires in 5 minutes.`,
-    from,
-    to: `+${phone}`,
-  })
+export async function sendOTP(phone: string): Promise<void> {
+  await getTwilioClient()
+    .verify.v2.services(getVerifyServiceSid())
+    .verifications.create({ to: `+${phone}`, channel: "sms" })
 }
 
-export async function verifyOTP(phone: string, eventId: string, code: string): Promise<boolean> {
-  const codeHash = hashCode(code)
+export async function verifyOTP(phone: string, code: string): Promise<boolean> {
+  const check = await getTwilioClient()
+    .verify.v2.services(getVerifyServiceSid())
+    .verificationChecks.create({ to: `+${phone}`, code })
 
-  const record = await db.otpCode.findFirst({
-    where: {
-      phone,
-      eventId,
-      codeHash,
-      used: false,
-      expiresAt: { gt: new Date() },
-    },
-  })
-
-  if (!record) return false
-
-  await db.otpCode.update({
-    where: { id: record.id },
-    data: { used: true },
-  })
-
-  return true
+  return check.status === "approved"
 }
