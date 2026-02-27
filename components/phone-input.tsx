@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { ChevronDown, Search } from "lucide-react"
 import * as PopoverPrimitive from "@radix-ui/react-popover"
 import { COUNTRIES, DEFAULT_COUNTRY, type Country } from "@/lib/countries"
@@ -15,6 +15,19 @@ export function PhoneInput({ onChange, onKeyDown }: PhoneInputProps) {
   const [localNumber, setLocalNumber] = useState("")
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState("")
+
+  // Detect country from IP on mount — no permissions needed, silent fallback
+  useEffect(() => {
+    fetch("https://ipapi.co/json/")
+      .then((res) => res.json())
+      .then((data: { country_code?: string }) => {
+        const match = COUNTRIES.find((c) => c.code === data.country_code)
+        if (match) setCountry(match)
+      })
+      .catch(() => {
+        // silently keep default (US)
+      })
+  }, [])
 
   function handleOpenChange(isOpen: boolean) {
     setOpen(isOpen)
