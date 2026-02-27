@@ -55,7 +55,7 @@ export function VideoHero({
     const update = () => setCountdown(getCountdown(eventDate))
     // Defer initial update to avoid calling setState synchronously in effect body
     const initTimer = setTimeout(update, 0)
-    const interval = setInterval(update, 60_000)
+    const interval = setInterval(update, 1_000)
     return () => {
       clearTimeout(initTimer)
       clearInterval(interval)
@@ -115,11 +115,12 @@ export function VideoHero({
 
         {/* Countdown (client-only to avoid hydration mismatch) */}
         {countdown && !countdown.isPast && (
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4" dir="ltr">
             {[
               { value: countdown.days, label: t(language, "days") },
               { value: countdown.hours, label: t(language, "hours") },
               { value: countdown.minutes, label: t(language, "min") },
+              { value: countdown.seconds, label: t(language, "sec") },
             ].map((unit) => (
               <div key={unit.label} className="flex flex-col items-center gap-0.5">
                 <span className="text-3xl font-bold tabular-nums text-white sm:text-4xl">
