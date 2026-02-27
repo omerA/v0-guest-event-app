@@ -19,7 +19,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid phone number" }, { status: 400 })
     }
 
-    await sendOTP(digits, eventId)
+    await sendOTP(digits)
 
     return NextResponse.json({ success: true, message: "Verification code sent" })
   } catch {
