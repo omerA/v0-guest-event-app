@@ -11,6 +11,7 @@ import { getBackgroundStyle } from "@/lib/backgrounds"
 import { useLanguage } from "@/components/language-provider"
 import { LanguageSwitcher } from "@/components/language-provider"
 import { t, getTranslation } from "@/lib/i18n"
+import { PhoneInput } from "@/components/phone-input"
 
 type ResponseValue = string | string[] | number | boolean | GuestCountValue
 
@@ -234,15 +235,10 @@ export function RsvpFlow({
               </div>
 
               <div className="flex w-full max-w-sm flex-col gap-4">
-                <input
-                  type="tel"
-                  dir="ltr"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="+1 (555) 000-0000"
-                  className="w-full rounded-2xl border-2 border-white/20 bg-white/10 px-6 py-5 text-center text-xl text-white placeholder-white/30 outline-none backdrop-blur-sm transition-colors focus:border-white/50 focus:bg-white/15"
-                  autoComplete="tel"
+                <PhoneInput
+                  onChange={setPhone}
                   onKeyDown={(e) => e.key === "Enter" && handleSendCode()}
+                  language={language}
                 />
                 {error && <p className="text-center text-sm text-red-300">{error}</p>}
                 <button
