@@ -44,6 +44,7 @@ export default async function EventPage({ params }: { params: Promise<{ eventId:
         eventLocationTranslations={config.locationTranslations}
         eventDescription={config.description}
         eventDescriptionTranslations={config.descriptionTranslations}
+        dressCode={config.dressCode}
         fontClass={fontClass}
       />
     </main>

@@ -1,5 +1,29 @@
 // Internationalization utilities and translations
 
+// ---- Dress Codes ----
+
+export const DRESS_CODES = [
+  { id: "none", translations: { en: "No Dress Code", he: "ללא קוד לבוש" } },
+  { id: "casual", translations: { en: "Casual", he: "קז'ואל" } },
+  { id: "smart-casual", translations: { en: "Smart Casual", he: "קז'ואל אלגנטי" } },
+  { id: "business-casual", translations: { en: "Business Casual", he: "קז'ואל עסקי" } },
+  { id: "festive", translations: { en: "Festive", he: "חגיגי" } },
+  { id: "cocktail", translations: { en: "Cocktail", he: "קוקטייל" } },
+  { id: "semi-formal", translations: { en: "Semi-Formal", he: "חצי פורמלי" } },
+  { id: "formal", translations: { en: "Formal", he: "פורמלי" } },
+  { id: "black-tie", translations: { en: "Black Tie", he: "עניבה שחורה" } },
+  { id: "white-tie", translations: { en: "White Tie", he: "עניבה לבנה" } },
+] as const
+
+export type DressCodeId = (typeof DRESS_CODES)[number]["id"]
+
+/** Get a translated label for a dress code id. Falls back to English, then the id itself. */
+export function getDressCodeLabel(id: string, lang: string): string {
+  const dc = DRESS_CODES.find((d) => d.id === id)
+  if (!dc) return id
+  return (dc.translations as Record<string, string>)[lang] ?? dc.translations.en ?? id
+}
+
 export const SUPPORTED_LANGUAGES = [
   { code: "en", label: "English", nativeLabel: "English", rtl: false },
   { code: "he", label: "Hebrew", nativeLabel: "עברית", rtl: true },
