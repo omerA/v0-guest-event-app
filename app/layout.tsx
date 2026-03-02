@@ -12,6 +12,7 @@ const _libreBaskerville = Libre_Baskerville({ subsets: ["latin"], weight: ["400"
 const _crimsonPro = Crimson_Pro({ subsets: ["latin"], weight: ["300", "400", "500", "600", "700"] })
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'),
   title: 'Event RSVP - Annual Gathering 2026',
   description: 'RSVP for the Annual Gathering 2026. Verify your phone number and let us know your preferences.',
   icons: {
