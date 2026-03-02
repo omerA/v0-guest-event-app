@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -10,6 +10,16 @@ import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import {
   Users,
   RefreshCw,
@@ -26,6 +36,7 @@ import {
   Calendar,
   ExternalLink,
   Copy,
+  Link,
 } from "lucide-react"
 import { MediaPicker } from "@/components/media-picker"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -136,6 +147,15 @@ export function AdminDashboard() {
       setSaving(false)
     }
   }, [config, selectedEventId, fetchEvents])
+
+  const handleRenameSuccess = useCallback(
+    async (newEventId: string) => {
+      // Refresh events list then switch to the new event ID
+      await fetchEvents()
+      setSelectedEventId(newEventId)
+    },
+    [fetchEvents]
+  )
 
   const handleCreateEvent = useCallback(async () => {
     if (!newEventName.trim()) return
@@ -365,7 +385,12 @@ export function AdminDashboard() {
           </div>
 
           <TabsContent value="settings">
-            <EventSettingsTab config={config} setConfig={setConfig} />
+            <EventSettingsTab
+              config={config}
+              setConfig={setConfig}
+              currentEventId={selectedEventId!}
+              onRenameSuccess={handleRenameSuccess}
+            />
           </TabsContent>
 
           <TabsContent value="pages">
@@ -452,7 +477,83 @@ function DateTimePicker({ value, onChange }: { value: string; onChange: (iso: st
 }
 
 // ---- Event Settings Tab ----
-function EventSettingsTab({ config, setConfig }: { config: EventConfig; setConfig: (c: EventConfig) => void }) {
+type SlugStatus = "idle" | "checking" | "available" | "taken" | "same"
+
+function EventSettingsTab({
+  config,
+  setConfig,
+  currentEventId,
+  onRenameSuccess,
+}: {
+  config: EventConfig
+  setConfig: (c: EventConfig) => void
+  currentEventId: string
+  onRenameSuccess: (newEventId: string) => void
+}) {
+  const [slugStatus, setSlugStatus] = useState<SlugStatus>("idle")
+  const [previewSlug, setPreviewSlug] = useState("")
+  const [showRenameDialog, setShowRenameDialog] = useState(false)
+  const [renaming, setRenaming] = useState(false)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Debounced slug availability check whenever config.name changes
+  useEffect(() => {
+    const name = config.name.trim()
+    if (!name || name.length < 2) {
+      setSlugStatus("idle")
+      setPreviewSlug("")
+      return
+    }
+
+    setSlugStatus("checking")
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `/api/events/check-name?name=${encodeURIComponent(name)}&currentEventId=${encodeURIComponent(currentEventId)}`
+        )
+        if (!res.ok) {
+          setSlugStatus("idle")
+          return
+        }
+        const data: { available: boolean; slug: string } = await res.json()
+        setPreviewSlug(data.slug)
+        if (data.slug === currentEventId) {
+          setSlugStatus("same")
+        } else {
+          setSlugStatus(data.available ? "available" : "taken")
+        }
+      } catch {
+        setSlugStatus("idle")
+      }
+    }, 500)
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+    }
+  }, [config.name, currentEventId])
+
+  async function handleRename() {
+    setRenaming(true)
+    try {
+      const res = await fetch("/api/events/rename", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentEventId, newName: config.name.trim() }),
+      })
+      if (res.ok) {
+        const data: { newEventId: string } = await res.json()
+        setShowRenameDialog(false)
+        onRenameSuccess(data.newEventId)
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setRenaming(false)
+    }
+  }
+
   function update(field: keyof EventConfig, value: string) {
     setConfig({ ...config, [field]: value })
   }
@@ -480,6 +581,32 @@ function EventSettingsTab({ config, setConfig }: { config: EventConfig; setConfi
   )
 
   return (
+    <>
+      <AlertDialog open={showRenameDialog} onOpenChange={setShowRenameDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Rename event and change URL?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="flex flex-col gap-3 text-sm text-muted-foreground">
+                <p>
+                  Renaming this event will change its public URL from{" "}
+                  <span className="font-mono font-medium text-foreground">/event/{currentEventId}</span> to{" "}
+                  <span className="font-mono font-medium text-foreground">/event/{previewSlug}</span>.
+                </p>
+                <p>Any existing links or bookmarks to the old URL will stop working.</p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={renaming}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleRename} disabled={renaming} className="gap-1.5">
+              {renaming && <Loader2 className="h-4 w-4 animate-spin" />}
+              Rename &amp; Change URL
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
     <div className="flex flex-col gap-6">
       <Card className="border-0 shadow-sm">
         <CardHeader>
@@ -495,6 +622,36 @@ function EventSettingsTab({ config, setConfig }: { config: EventConfig; setConfi
               onChange={(e) => update("name", e.target.value)}
               placeholder="Annual Gathering 2026"
             />
+            {/* Slug preview and availability */}
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Link className="h-3 w-3 shrink-0" />
+                <span className="font-mono">/event/{previewSlug || currentEventId}</span>
+                {slugStatus === "checking" && <Loader2 className="h-3 w-3 animate-spin" />}
+                {slugStatus === "available" && (
+                  <Badge variant="outline" className="border-green-500 text-green-600 text-[10px] px-1.5 py-0">
+                    available
+                  </Badge>
+                )}
+                {slugStatus === "taken" && (
+                  <Badge variant="outline" className="border-red-400 text-red-500 text-[10px] px-1.5 py-0">
+                    taken
+                  </Badge>
+                )}
+              </div>
+              {slugStatus === "available" && previewSlug !== currentEventId && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-7 gap-1.5 text-xs border-amber-400 text-amber-600 hover:bg-amber-50"
+                  onClick={() => setShowRenameDialog(true)}
+                >
+                  <Link className="h-3 w-3" />
+                  Rename &amp; Change URL
+                </Button>
+              )}
+            </div>
             {nonDefaultLanguages.map((lang) => {
               const langInfo = SUPPORTED_LANGUAGES.find((l) => l.code === lang)
               return (
@@ -695,6 +852,7 @@ function EventSettingsTab({ config, setConfig }: { config: EventConfig; setConfi
         </CardContent>
       </Card>
     </div>
+    </>
   )
 }
 

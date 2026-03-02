@@ -415,6 +415,115 @@ export async function deleteEvent(eventId: string): Promise<boolean> {
   return true
 }
 
+export async function checkEventNameAvailability(
+  name: string,
+  currentEventId: string
+): Promise<{ available: boolean; slug: string }> {
+  const slug = slugify(name)
+  if (!slug) return { available: false, slug }
+  // Same slug as current event — only display name changes, URL stays the same
+  if (slug === currentEventId) return { available: true, slug }
+  const existing = await db.event.findUnique({ where: { id: slug } })
+  return { available: !existing, slug }
+}
+
+export async function renameEvent(
+  currentEventId: string,
+  newName: string
+): Promise<{ newId: string } | null> {
+  const newSlug = slugify(newName)
+  if (!newSlug) return null
+
+  const currentEvent = await db.event.findUnique({
+    where: { id: currentEventId },
+    include: { pages: { include: { questions: true } } },
+  })
+  if (!currentEvent) return null
+
+  // If the slug hasn't changed, just update the display name
+  if (newSlug === currentEventId) {
+    await db.event.update({ where: { id: currentEventId }, data: { name: newName } })
+    return { newId: currentEventId }
+  }
+
+  // Ensure the new slug is not taken by another event
+  const conflict = await db.event.findUnique({ where: { id: newSlug } })
+  if (conflict) return null
+
+  const pages = (currentEvent as PrismaEvent & { pages: (PrismaPage & { questions: PrismaQuestion[] })[] }).pages
+
+  await db.$transaction(async (tx: TxClient) => {
+    // 1. Create the new event record (no pages yet)
+    await tx.event.create({
+      data: {
+        id: newSlug,
+        name: newName,
+        date: currentEvent.date,
+        location: currentEvent.location,
+        locationTranslations: currentEvent.locationTranslations ?? undefined,
+        description: currentEvent.description,
+        descriptionTranslations: currentEvent.descriptionTranslations ?? undefined,
+        nameTranslations: currentEvent.nameTranslations ?? undefined,
+        heroMediaUrl: currentEvent.heroMediaUrl,
+        heroMediaType: currentEvent.heroMediaType,
+        fontFamily: currentEvent.fontFamily,
+        supportedLanguages: currentEvent.supportedLanguages,
+        defaultLanguage: currentEvent.defaultLanguage,
+        createdAt: currentEvent.createdAt,
+      },
+    })
+
+    // 2. Move guests to new event
+    await tx.guest.updateMany({
+      where: { eventId: currentEventId },
+      data: { eventId: newSlug },
+    })
+
+    // 3. Delete old pages and questions (freeing their IDs)
+    await tx.question.deleteMany({ where: { page: { eventId: currentEventId } } })
+    await tx.eventPage.deleteMany({ where: { eventId: currentEventId } })
+
+    // 4. Re-create pages and questions under the new event ID
+    for (let pi = 0; pi < pages.length; pi++) {
+      const page = pages[pi]
+      await tx.eventPage.create({
+        data: {
+          id: page.id,
+          eventId: newSlug,
+          title: page.title,
+          titleTranslations: page.titleTranslations ?? undefined,
+          subtitle: page.subtitle ?? null,
+          subtitleTranslations: page.subtitleTranslations ?? undefined,
+          backgroundId: page.backgroundId,
+          backgroundImageUrl: page.backgroundImageUrl ?? null,
+          order: page.order,
+          questions: {
+            create: page.questions.map((q) => ({
+              id: q.id,
+              type: q.type,
+              label: q.label,
+              labelTranslations: q.labelTranslations ?? undefined,
+              description: q.description ?? null,
+              descriptionTranslations: q.descriptionTranslations ?? undefined,
+              options: q.options ?? undefined,
+              optionsTranslations: q.optionsTranslations ?? undefined,
+              min: q.min ?? null,
+              max: q.max ?? null,
+              required: q.required,
+              order: q.order,
+            })),
+          },
+        },
+      })
+    }
+
+    // 5. Delete the old event (guests already re-pointed, pages already deleted)
+    await tx.event.delete({ where: { id: currentEventId } })
+  })
+
+  return { newId: newSlug }
+}
+
 export async function updateEventConfig(eventId: string, updates: Partial<EventConfig>): Promise<EventConfig | null> {
   const existing = await db.event.findUnique({ where: { id: eventId } })
   if (!existing) return null
