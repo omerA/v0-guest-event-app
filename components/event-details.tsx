@@ -4,7 +4,7 @@ import Link from "next/link"
 import { CalendarDays, MapPin, Clock, Users, Navigation } from "lucide-react"
 import { formatEventDate, formatEventTime, googleMapsUrl, wazeUrl, appleMapsUrl } from "@/lib/date-utils"
 import { useLanguage } from "@/components/language-provider"
-import { t, getTranslation } from "@/lib/i18n"
+import { t, getTranslation, getDressCodeLabel } from "@/lib/i18n"
 
 interface EventDetailsProps {
   eventId: string
@@ -14,6 +14,7 @@ interface EventDetailsProps {
   eventLocationTranslations?: Record<string, string>
   eventDescription: string
   eventDescriptionTranslations?: Record<string, string>
+  dressCode?: string
   fontClass: string
 }
 
@@ -24,6 +25,7 @@ export function EventDetails({
   eventLocationTranslations,
   eventDescription,
   eventDescriptionTranslations,
+  dressCode,
   fontClass,
 }: EventDetailsProps) {
   const { language } = useLanguage()
@@ -68,7 +70,13 @@ export function EventDetails({
             title={t(language, "time")}
             value={formatEventTime(eventDate, language)}
           />
-          <DetailCard icon={<Users className="h-6 w-6" />} title={t(language, "dresscode")} value="Semi-formal" />
+          {dressCode && dressCode !== "none" && (
+            <DetailCard
+              icon={<Users className="h-6 w-6" />}
+              title={t(language, "dresscode")}
+              value={getDressCodeLabel(dressCode, language)}
+            />
+          )}
         </div>
 
         <p className="max-w-lg text-base leading-relaxed text-white/50 text-pretty">{displayDescription}</p>

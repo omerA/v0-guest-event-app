@@ -43,7 +43,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar as CalendarWidget } from "@/components/ui/calendar"
 import type { Guest, EventPage, EventConfig, QuestionType } from "@/lib/store"
 import { BACKGROUND_GALLERY, FONT_OPTIONS } from "@/lib/store"
-import { SUPPORTED_LANGUAGES } from "@/lib/i18n"
+import { SUPPORTED_LANGUAGES, DRESS_CODES } from "@/lib/i18n"
 import { getFontStyle } from "@/lib/fonts"
 import { formatEventDateShort } from "@/lib/date-utils"
 import { parseISO, isValid, format } from "date-fns"
@@ -728,6 +728,24 @@ function EventSettingsTab({
                 </div>
               )
             })}
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="event-dresscode">Dress Code</Label>
+            <Select
+              value={config.dressCode ?? "none"}
+              onValueChange={(val) => setConfig({ ...config, dressCode: val })}
+            >
+              <SelectTrigger id="event-dresscode" className="w-64">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {DRESS_CODES.map((dc) => (
+                  <SelectItem key={dc.id} value={dc.id}>
+                    {dc.translations.en}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="flex flex-col gap-3">
             <Label>Hero Media</Label>

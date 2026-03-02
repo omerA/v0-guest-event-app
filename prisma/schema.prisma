@@ -19,6 +19,7 @@ model Event {
   heroMediaUrl            String
   heroMediaType           String
   fontFamily              String
+  dressCode               String      @default("none")
   supportedLanguages      String[]    @default(["en"])
   defaultLanguage         String      @default("en")
   createdAt               DateTime    @default(now())
