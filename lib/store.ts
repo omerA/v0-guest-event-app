@@ -49,6 +49,7 @@ export interface EventConfig {
   heroMediaUrl: string
   heroMediaType: HeroMediaType
   fontFamily: FontFamily
+  dressCode: string
   supportedLanguages: string[]
   defaultLanguage: string
   pages: EventPage[]
@@ -257,6 +258,7 @@ type PrismaEvent = {
   heroMediaUrl: string
   heroMediaType: string
   fontFamily: string
+  dressCode: string
   supportedLanguages: string[]
   defaultLanguage: string
   createdAt: Date
@@ -319,6 +321,7 @@ function mapEvent(e: PrismaEvent): EventConfig {
     heroMediaUrl: e.heroMediaUrl,
     heroMediaType: e.heroMediaType as HeroMediaType,
     fontFamily: e.fontFamily as FontFamily,
+    dressCode: e.dressCode ?? "none",
     supportedLanguages: e.supportedLanguages ?? ["en"],
     defaultLanguage: e.defaultLanguage ?? "en",
     createdAt: e.createdAt.toISOString(),
@@ -467,6 +470,7 @@ export async function renameEvent(
         heroMediaUrl: currentEvent.heroMediaUrl,
         heroMediaType: currentEvent.heroMediaType,
         fontFamily: currentEvent.fontFamily,
+        dressCode: currentEvent.dressCode ?? "none",
         supportedLanguages: currentEvent.supportedLanguages,
         defaultLanguage: currentEvent.defaultLanguage,
         createdAt: currentEvent.createdAt,
@@ -550,6 +554,7 @@ export async function updateEventConfig(eventId: string, updates: Partial<EventC
         ...(scalarUpdates.heroMediaUrl !== undefined && { heroMediaUrl: scalarUpdates.heroMediaUrl }),
         ...(scalarUpdates.heroMediaType !== undefined && { heroMediaType: scalarUpdates.heroMediaType }),
         ...(scalarUpdates.fontFamily !== undefined && { fontFamily: scalarUpdates.fontFamily }),
+        ...(scalarUpdates.dressCode !== undefined && { dressCode: scalarUpdates.dressCode }),
         ...(scalarUpdates.supportedLanguages !== undefined && { supportedLanguages: scalarUpdates.supportedLanguages }),
         ...(scalarUpdates.defaultLanguage !== undefined && { defaultLanguage: scalarUpdates.defaultLanguage }),
       },
