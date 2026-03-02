@@ -11,6 +11,16 @@ export async function generateMetadata({ params }: { params: Promise<{ eventId: 
   return {
     title: config.name,
     description: config.description,
+    openGraph: {
+      title: config.name,
+      description: config.description,
+      type: "website",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: config.name,
+      description: config.description,
+    },
   }
 }
 
