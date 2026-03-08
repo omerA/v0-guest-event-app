@@ -42,6 +42,7 @@ export interface EventConfig {
   name: string
   nameTranslations?: Record<string, string>
   date: string
+  timezone: string
   location: string
   locationTranslations?: Record<string, string>
   description: string
@@ -251,6 +252,7 @@ type PrismaEvent = {
   name: string
   nameTranslations: unknown
   date: string
+  timezone: string
   location: string
   locationTranslations: unknown
   description: string
@@ -314,6 +316,7 @@ function mapEvent(e: PrismaEvent): EventConfig {
     name: e.name,
     nameTranslations: asTranslationMap(e.nameTranslations),
     date: e.date,
+    timezone: e.timezone ?? "UTC",
     location: e.location,
     locationTranslations: asTranslationMap(e.locationTranslations),
     description: e.description,
@@ -365,6 +368,7 @@ export async function createEvent(name: string): Promise<EventConfig> {
       id: slug,
       name,
       date: "",
+      timezone: "UTC",
       location: "TBD",
       description: "Event description here.",
       heroMediaUrl: "https://images.unsplash.com/photo-1519167758481-83f550bb49b3?w=1920&q=80",
@@ -462,6 +466,7 @@ export async function renameEvent(
         id: newSlug,
         name: newName,
         date: currentEvent.date,
+        timezone: currentEvent.timezone ?? "UTC",
         location: currentEvent.location,
         locationTranslations: currentEvent.locationTranslations ?? undefined,
         description: currentEvent.description,
@@ -543,6 +548,7 @@ export async function updateEventConfig(eventId: string, updates: Partial<EventC
           nameTranslations: scalarUpdates.nameTranslations ?? undefined,
         }),
         ...(scalarUpdates.date !== undefined && { date: scalarUpdates.date }),
+        ...(scalarUpdates.timezone !== undefined && { timezone: scalarUpdates.timezone }),
         ...(scalarUpdates.location !== undefined && { location: scalarUpdates.location }),
         ...(scalarUpdates.locationTranslations !== undefined && {
           locationTranslations: scalarUpdates.locationTranslations ?? undefined,
