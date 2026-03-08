@@ -20,6 +20,7 @@ model Event {
   heroMediaType           String
   fontFamily              String
   dressCode               String      @default("none")
+  timezone                String      @default("UTC")
   supportedLanguages      String[]    @default(["en"])
   defaultLanguage         String      @default("en")
   createdAt               DateTime    @default(now())
