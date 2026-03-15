@@ -412,6 +412,44 @@ export function AdminDashboard() {
   )
 }
 
+// ---- Timezone options (IANA identifiers with friendly labels) ----
+const TIMEZONE_OPTIONS: { value: string; label: string }[] = [
+  { value: "UTC", label: "UTC — Coordinated Universal Time" },
+  { value: "America/New_York", label: "New York (ET, UTC−5/−4)" },
+  { value: "America/Chicago", label: "Chicago (CT, UTC−6/−5)" },
+  { value: "America/Denver", label: "Denver (MT, UTC−7/−6)" },
+  { value: "America/Los_Angeles", label: "Los Angeles (PT, UTC−8/−7)" },
+  { value: "America/Anchorage", label: "Anchorage (AKT, UTC−9/−8)" },
+  { value: "Pacific/Honolulu", label: "Honolulu (HST, UTC−10)" },
+  { value: "America/Toronto", label: "Toronto (ET, UTC−5/−4)" },
+  { value: "America/Vancouver", label: "Vancouver (PT, UTC−8/−7)" },
+  { value: "America/Sao_Paulo", label: "São Paulo (BRT, UTC−3)" },
+  { value: "America/Argentina/Buenos_Aires", label: "Buenos Aires (ART, UTC−3)" },
+  { value: "America/Mexico_City", label: "Mexico City (CST, UTC−6/−5)" },
+  { value: "Europe/London", label: "London (GMT/BST, UTC+0/+1)" },
+  { value: "Europe/Paris", label: "Paris (CET, UTC+1/+2)" },
+  { value: "Europe/Berlin", label: "Berlin (CET, UTC+1/+2)" },
+  { value: "Europe/Rome", label: "Rome (CET, UTC+1/+2)" },
+  { value: "Europe/Madrid", label: "Madrid (CET, UTC+1/+2)" },
+  { value: "Europe/Amsterdam", label: "Amsterdam (CET, UTC+1/+2)" },
+  { value: "Europe/Moscow", label: "Moscow (MSK, UTC+3)" },
+  { value: "Africa/Cairo", label: "Cairo (EET, UTC+2)" },
+  { value: "Africa/Johannesburg", label: "Johannesburg (SAST, UTC+2)" },
+  { value: "Africa/Lagos", label: "Lagos (WAT, UTC+1)" },
+  { value: "Asia/Jerusalem", label: "Jerusalem (IST, UTC+2/+3)" },
+  { value: "Asia/Dubai", label: "Dubai (GST, UTC+4)" },
+  { value: "Asia/Kolkata", label: "Mumbai / Kolkata (IST, UTC+5:30)" },
+  { value: "Asia/Dhaka", label: "Dhaka (BST, UTC+6)" },
+  { value: "Asia/Bangkok", label: "Bangkok (ICT, UTC+7)" },
+  { value: "Asia/Singapore", label: "Singapore (SGT, UTC+8)" },
+  { value: "Asia/Shanghai", label: "Shanghai (CST, UTC+8)" },
+  { value: "Asia/Tokyo", label: "Tokyo (JST, UTC+9)" },
+  { value: "Asia/Seoul", label: "Seoul (KST, UTC+9)" },
+  { value: "Australia/Sydney", label: "Sydney (AEST, UTC+10/+11)" },
+  { value: "Australia/Melbourne", label: "Melbourne (AEST, UTC+10/+11)" },
+  { value: "Pacific/Auckland", label: "Auckland (NZST, UTC+12/+13)" },
+]
+
 // ---- Date Time Picker ----
 function DateTimePicker({ value, onChange }: { value: string; onChange: (iso: string) => void }) {
   const date = value ? parseISO(value) : undefined
@@ -419,12 +457,16 @@ function DateTimePicker({ value, onChange }: { value: string; onChange: (iso: st
 
   const timeValue = isDateValid ? format(date, "HH:mm") : "19:00"
 
+  function toLocalIso(d: Date): string {
+    return format(d, "yyyy-MM-dd'T'HH:mm:ss")
+  }
+
   function handleDateSelect(newDate: Date | undefined) {
     if (!newDate) return
     // Preserve the time from current value or default to 19:00
     const [hours, minutes] = timeValue.split(":").map(Number)
     newDate.setHours(hours, minutes, 0, 0)
-    onChange(newDate.toISOString())
+    onChange(toLocalIso(newDate))
   }
 
   function handleTimeChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -432,12 +474,12 @@ function DateTimePicker({ value, onChange }: { value: string; onChange: (iso: st
     if (isDateValid) {
       const updated = new Date(date)
       updated.setHours(hours, minutes, 0, 0)
-      onChange(updated.toISOString())
+      onChange(toLocalIso(updated))
     } else {
       // Set a default date with this time
       const now = new Date()
       now.setHours(hours, minutes, 0, 0)
-      onChange(now.toISOString())
+      onChange(toLocalIso(now))
     }
   }
 
@@ -699,6 +741,24 @@ function EventSettingsTab({
                 )
               })}
             </div>
+          </div>
+          <div className="flex flex-col gap-2 sm:max-w-[calc(66.666%_-_0.5rem)]">
+            <Label htmlFor="event-timezone">Timezone (for event owners only)</Label>
+            <Select value={config.timezone ?? "UTC"} onValueChange={(val) => update("timezone", val)}>
+              <SelectTrigger id="event-timezone" className="h-9">
+                <SelectValue placeholder="Select timezone" />
+              </SelectTrigger>
+              <SelectContent className="max-h-72">
+                {TIMEZONE_OPTIONS.map((tz) => (
+                  <SelectItem key={tz.value} value={tz.value}>
+                    {tz.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-muted-foreground">
+              Helps you set the correct local time for the event. Not shown to guests.
+            </p>
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="event-desc">Description</Label>
