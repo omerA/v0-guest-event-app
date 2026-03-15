@@ -7,8 +7,71 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ─── Owner accounts ───────────────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  passwordHash  String?             // null for OAuth-only users
+  name          String?
+  ownerSlug     String    @unique   // URL-safe handle; derived from email at signup
+  role          String    @default("owner")   // "owner" | "superadmin"
+  status        String    @default("active")  // "active" | "suspended"
+  createdAt     DateTime  @default(now())
+
+  events        Event[]
+  notifications NotificationTemplate[]
+  accounts      Account[]
+  sessions      Session[]
+}
+
+// NextAuth Prisma adapter — linked OAuth accounts (one per provider per user)
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+// NextAuth Prisma adapter — active database sessions
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// NextAuth Prisma adapter — email verification tokens
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─── Events ───────────────────────────────────────────────────────────────────
+
 model Event {
-  id                      String      @id
+  id      String  @id  // Set by app; Track A migrates to cuid generation
+  slug    String?      // URL-friendly name, unique per owner; made required + @@unique([ownerId,slug]) by Track A
+  ownerId String?      // FK to User; made required (NOT NULL) by Track A after data migration
+  owner   User?   @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+
   name                    String
   nameTranslations        Json?
   date                    String
@@ -19,13 +82,16 @@ model Event {
   heroMediaUrl            String
   heroMediaType           String
   fontFamily              String
-  dressCode               String      @default("none")
-  timezone                String      @default("UTC")
-  supportedLanguages      String[]    @default(["en"])
-  defaultLanguage         String      @default("en")
-  createdAt               DateTime    @default(now())
-  pages                   EventPage[]
-  guests                  Guest[]
+  dressCode               String   @default("none")
+  timezone                String   @default("UTC")
+  supportedLanguages      String[] @default(["en"])
+  defaultLanguage         String   @default("en")
+  createdAt               DateTime @default(now())
+
+  pages                 EventPage[]
+  guests                Guest[]
+  notificationTemplates NotificationTemplate[]
+  invitees              Invitee[]
 }
 
 model EventPage {
@@ -80,4 +146,73 @@ model MediaFile {
   type       String
   mimeType   String
   uploadedAt DateTime @default(now())
+}
+
+// ─── Notifications ────────────────────────────────────────────────────────────
+
+// Owner-configured notification templates per event.
+// type: "blast" = send immediately to all guests/invitees
+//       "reminder" = scheduled N days before event date
+model NotificationTemplate {
+  id              String    @id @default(cuid())
+  eventId         String
+  event           Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  ownerId         String
+  owner           User      @relation(fields: [ownerId], references: [id])
+  name            String    // Owner-facing label
+  channel         String    // "sms" | "email"
+  type            String    // "blast" | "reminder"
+  subject         String?   // Email subject (null for SMS)
+  body            String    // Supports {{guest_name}}, {{event_name}}, {{event_date}}, {{event_url}}
+  daysBeforeEvent Int?      // null for blasts; e.g. 7 = fire 7 days before event
+  sentAt          DateTime? // Set when a blast is triggered
+  createdAt       DateTime  @default(now())
+
+  scheduledJobs ScheduledNotificationJob[]
+}
+
+// Individual delivery jobs — one per recipient per template run
+model ScheduledNotificationJob {
+  id         String               @id @default(cuid())
+  templateId String
+  template   NotificationTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  inviteeId  String?              // Set if recipient is an Invitee
+  guestId    String?              // Set if recipient is a Guest (RSVP'd)
+  recipient  String               // E.164 phone or email address
+  status     String               @default("pending") // "pending" | "sent" | "failed"
+  scheduledAt DateTime
+  sentAt      DateTime?
+  error       String?
+  createdAt   DateTime @default(now())
+}
+
+// ─── Invitees ─────────────────────────────────────────────────────────────────
+
+// Guests uploaded by the event owner before RSVPs are submitted.
+// status tracks progression: invited → rsvped (matched by phone against Guest table)
+model Invitee {
+  id        String    @id @default(cuid())
+  eventId   String
+  event     Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  name      String
+  email     String?
+  phone     String?
+  status    String    @default("invited") // "invited" | "rsvped" | "declined"
+  invitedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@unique([eventId, email])
+}
+
+// ─── Super-admin ──────────────────────────────────────────────────────────────
+
+// Immutable audit trail for every destructive action taken from /super-admin
+model SuperAdminAuditLog {
+  id         String   @id @default(cuid())
+  actorEmail String
+  action     String   // e.g. "suspend_owner", "delete_guest", "retry_notification_job"
+  targetType String   // "User" | "Event" | "Guest" | "NotificationJob" | "Invitee"
+  targetId   String
+  meta       Json?    // additional context (old values, reasons, etc.)
+  createdAt  DateTime @default(now())
 }
