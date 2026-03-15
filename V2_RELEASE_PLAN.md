@@ -10,6 +10,7 @@ v2.0 transforms the app from a single-admin, single-event RSVP tool into a **mul
 2. **Owner Accounts & Dashboard** — email/password accounts and popular social/IDP login replace the shared admin password; each owner manages their own events in an isolated namespace
 3. **Event Notifications** — owners configure one-time SMS/email blasts or scheduled reminders for guests
 4. **Invitee Management** — owners upload guest lists (CSV) and send personalised invite URLs via SMS or email
+5. **Super-Admin / Ops Dashboard** — platform-level dashboard for the app developer: business metrics, customer management, error monitoring, structured logging, and scoped data-correction tools
 
 ---
 
@@ -30,6 +31,8 @@ model User {
   passwordHash  String?             // Null for OAuth-only users
   name          String?
   ownerSlug     String    @unique   // URL-safe handle, derived from email prefix at signup
+  role          String    @default("owner")    // "owner" | "superadmin"
+  status        String    @default("active")   // "active" | "suspended"
   createdAt     DateTime  @default(now())
 
   events        Event[]
@@ -305,20 +308,21 @@ These four tracks have **minimal overlap** and can be developed simultaneously a
 ┌─────────────────────────────────────────────────────────────┐
 │               SHARED: DB Migration (do first)               │
 │  Run once: apply the v2 schema, set up pg-boss tables       │
-└───────────────┬─────────────────────────────────────────────┘
-                │
-    ┌───────────┼───────────────────────────────────┐
-    ▼           ▼               ▼                   ▼
- Track A     Track B         Track C             Track D
- Auth &      Marketing       Notification        Invitee
- Dashboard   Homepage        System              Management
+└───────────┬─────────────────────────────────────────────────┘
+            │
+  ┌─────────┼──────────────────────────────────────┐
+  ▼         ▼               ▼           ▼           ▼
+Track A   Track B         Track C     Track D     Track E
+Auth &    Marketing       Notif-      Invitee     Super-Admin
+Dashboard Homepage        ication     Mgmt        Ops Dashboard
 ```
 
 **Track dependencies:**
 - Track B (homepage) has zero runtime dependencies on other tracks — it only needs to link to `/signup`
 - Tracks C and D both depend on Track A for the `User` session (they read `ownerId` from the session cookie)
-- Tracks C and D are **independent of each other**
-- Track A should be developed first or in parallel; Tracks C and D can start with mocked auth and integrate once Track A is ready
+- Track E depends on Track A for the `role` field on `User` and the `requireSuperAdmin()` guard — but its metrics pages and third-party integrations (Sentry, Axiom) can be set up independently
+- Tracks C, D, and E are **independent of each other**
+- Track A should be developed first or in parallel; other tracks can start with mocked auth and integrate once Track A is merged
 
 ---
 
@@ -432,7 +436,7 @@ Update all existing event/admin API routes to use owner session instead of passw
 - Change `app/page.tsx` from redirect-to-first-event to redirect to `/` (marketing page — handled by Track B)
 - If user has active session, redirect to `/dashboard`
 
-#### Interface Contracts (for Tracks C & D)
+#### Interface Contracts (for Tracks C, D & E)
 
 Track A exposes a thin wrapper in `lib/owner-auth.ts` so other tracks never import from `next-auth` directly:
 
@@ -465,9 +469,12 @@ export async function requireOwnerSession(): Promise<OwnerSession>
 
 // Throws Response with 403 if session user does not own the event
 export async function requireEventOwnership(eventId: string): Promise<OwnerSession>
+
+// Throws Response with 403 if session user is not role="superadmin"
+export async function requireSuperAdmin(): Promise<OwnerSession>
 ```
 
-> Tracks C and D call `requireOwnerSession()` / `requireEventOwnership()` from this file. They do **not** import `auth` directly.
+> Tracks C, D, and E call these helpers from `lib/owner-auth.ts`. They do **not** import `auth` directly.
 
 ---
 
@@ -687,6 +694,175 @@ In `/dashboard/events/[eventId]/invitees` (shell created by Track A):
 
 ---
 
+## Track E — Super-Admin / Ops Dashboard
+
+**Owner:** Agent E
+**Touches:** `app/super-admin/`, `lib/owner-auth.ts` (read `requireSuperAdmin`), `lib/admin-metrics.ts`, `instrumentation.ts` (Sentry + Axiom init), API routes under `/api/super-admin/`
+
+**Prerequisite:** Track A must have landed the `User.role` field and `requireSuperAdmin()` helper. All metrics queries and third-party SDK wiring (Sentry, Axiom) can proceed in parallel.
+
+### Context & Guiding Principles
+
+This dashboard is for **you as the app developer** — not for event owners. It has three distinct jobs:
+
+1. **Business visibility** — understand growth, usage, and health at a glance
+2. **Customer support** — investigate and fix issues for specific owners or guests without needing raw DB access
+3. **Platform health** — surface errors, slow API routes, failed jobs, and delivery failures in one place
+
+The approach deliberately avoids embedding a generic DB admin UI (raw SQL in the browser is a security liability and slow to use for support). Instead, every action is a specific, safe, audited operation. For raw SQL exploration use Prisma Studio locally or Railway's built-in DB browser linked from the admin UI.
+
+### Access Control
+
+- **Route protection**: `middleware.ts` — add `/super-admin/:path*` to the protected matcher; after NextAuth session check, also verify `session.user.role === "superadmin"`
+- **Bootstrap**: The first superadmin is granted by running the seed script with `SUPER_ADMIN_EMAIL` env var set. Subsequent promotions are done through the admin UI.
+- **Audit log**: Every destructive action taken from `/super-admin` is written to a `SuperAdminAuditLog` table (see schema below) with timestamp, actor email, action, and target ID.
+
+Add to Prisma schema:
+
+```prisma
+model SuperAdminAuditLog {
+  id         String   @id @default(cuid())
+  actorEmail String
+  action     String   // e.g. "suspend_owner", "delete_guest", "retry_notification_job"
+  targetType String   // "User" | "Event" | "Guest" | "NotificationJob" | etc.
+  targetId   String
+  meta       Json?    // additional context
+  createdAt  DateTime @default(now())
+}
+```
+
+### Pages & Routes
+
+#### `/super-admin` — Business Metrics Overview
+
+Summary cards (query via `/api/super-admin/metrics`):
+
+| Metric | Description |
+|---|---|
+| Total owners | Count of `User` where `role = "owner"`, with delta vs last 7 days |
+| Active owners | Owners who have at least one event |
+| Total events | Count of all events, split: upcoming / past |
+| Total guests | Count of all `Guest` rows (RSVPs submitted) |
+| Total invitees | Count of all `Invitee` rows (before RSVP) |
+| Notification delivery | Sent / failed jobs in last 30 days |
+| Failed jobs (24h) | Count of `ScheduledNotificationJob` with `status = "failed"` in last 24h — shows as red badge if > 0 |
+
+Time-series charts using the existing `Recharts` library:
+- **New owner signups** — daily count over the last 30 days
+- **Events created** — daily count over the last 30 days
+- **RSVPs submitted** — daily count over the last 30 days (sourced from `Guest.submittedAt`)
+
+#### `/super-admin/owners` — Owner Management
+
+Full-text search across `User.email` and `User.name`. Table columns:
+
+| Column | Details |
+|---|---|
+| Name / email | Linked to owner detail page |
+| Status | `active` / `suspended` badge |
+| Sign-in methods | OAuth provider badges (Google, GitHub, etc.) + "Password" if credentials set |
+| Events | Count of their events |
+| Guests | Total guests across all their events |
+| Joined | `createdAt` |
+| Actions | Suspend / restore, view events, promote to superadmin |
+
+**Owner detail page** (`/super-admin/owners/[userId]`):
+- Owner profile (name, email, ownerSlug, avatar, sign-in methods)
+- Event list: name, date, guest count, RSVP completion status
+- Ability to view any of their events exactly as the owner would see them (read-only)
+- Danger zone: suspend account (blocks dashboard login, events remain visible to guests until manually taken down), permanently delete account (requires typing email to confirm)
+
+**Impersonation for support** (`POST /api/super-admin/impersonate`):
+- Sets a special `impersonating` flag in the session pointing to the target owner's `userId`
+- Redirects to `/dashboard` where the UI shows a yellow "Impersonating [name]" banner
+- All writes are blocked during impersonation (read-only view) to prevent accidental changes
+- "End impersonation" button returns to the super-admin session
+- Action is recorded in `SuperAdminAuditLog`
+
+#### `/super-admin/events` — Event Explorer
+
+Search all events across all owners. Table: event name, owner, date, location, guest count, RSVP open/closed status. Click through to a read-only event detail view. Admin can reassign an event to a different owner (e.g., during account migration).
+
+#### `/super-admin/guests` — Guest Support
+
+Search guests by phone number or name across all events. Useful for the support case: _"Guest X says they can't access the RSVP — help?"_
+
+Results show: guest name, phone, event name, owner, submission date, full response data. Admin can delete a specific guest record (to allow re-RSVP from the same phone) with audit log.
+
+#### `/super-admin/notifications` — Notification Job Monitor
+
+Lists `ScheduledNotificationJob` rows across all events with filters:
+- Status: pending / sent / failed
+- Channel: SMS / email
+- Date range
+
+Failed jobs show the `error` field. **Retry failed jobs** button re-enqueues them via `pg-boss`. Useful for diagnosing Twilio/Resend outages.
+
+#### `/super-admin/logs` — Observability Hub
+
+This page is a **launcher / linker** — it does not reproduce what Axiom and Sentry already do well. It provides:
+
+- Embedded Sentry recent-issues widget (using Sentry's embeddable component or direct iframe to the Sentry project)
+- Link to Axiom dataset with pre-built query URLs for common lookups:
+  - All errors in the last 1h
+  - API latency P95 by route
+  - Requests by owner
+  - Notification delivery events
+- Summary of failed `ScheduledNotificationJob`s in the last 24h (sourced from DB, not Axiom — no external dependency for this)
+
+### Third-Party Observability Integrations
+
+These are set up as part of Track E but affect the whole codebase.
+
+#### Error Tracking: Sentry
+
+```
+pnpm add @sentry/nextjs
+```
+
+- Run `npx @sentry/wizard@latest -i nextjs` to generate `sentry.client.config.ts`, `sentry.server.config.ts`, `sentry.edge.config.ts`
+- Captures: unhandled exceptions, API route errors, performance traces, source maps
+- Configure `tracesSampleRate: 0.2` in production (20% of requests — adjust based on volume)
+- Add `SENTRY_DSN` env var; `SENTRY_AUTH_TOKEN` for source map upload in CI
+- In all API route error handlers, call `Sentry.captureException(err)` before returning a 500
+
+#### Structured Logging: Axiom
+
+```
+pnpm add next-axiom
+```
+
+- Wraps Next.js middleware and API routes with structured log emission
+- Replace `console.log` / `console.error` calls throughout `lib/` with `log.info(msg, { ...fields })` / `log.error(msg, { ...fields })`
+- Standard fields to include in every log line: `{ requestId, ownerId?, eventId?, route, durationMs }`
+- Configure `AXIOM_DATASET` and `AXIOM_TOKEN` env vars
+
+### API Routes
+
+Under `/api/super-admin/`:
+
+| Route | Method | Purpose |
+|---|---|---|
+| `metrics` | GET | Aggregate counts + time-series data for dashboard |
+| `owners` | GET | Paginated, searchable owner list |
+| `owners/[userId]` | GET | Single owner detail with events |
+| `owners/[userId]/suspend` | POST | Suspend / restore owner account |
+| `owners/[userId]/promote` | POST | Set `role = "superadmin"` |
+| `owners/[userId]` | DELETE | Permanently delete owner + cascade |
+| `impersonate` | POST | Start impersonation session |
+| `impersonate` | DELETE | End impersonation session |
+| `events` | GET | All events across all owners |
+| `events/[eventId]/reassign` | POST | Change event owner |
+| `guests/search` | GET | Search guests by phone/name |
+| `guests/[guestId]` | DELETE | Delete guest record (allow re-RSVP) |
+| `notifications/jobs` | GET | List notification jobs with filters |
+| `notifications/jobs/[jobId]/retry` | POST | Re-enqueue a failed job |
+| `audit-log` | GET | Paginated audit log |
+
+All routes: auth via `requireSuperAdmin()` from `lib/owner-auth.ts`.
+
+---
+
 ## Shared Concerns
 
 ### Environment Variables (v2.0 additions)
@@ -730,11 +906,24 @@ UNSPLASH_ACCESS_KEY=...
 - **GitHub**: Create GitHub OAuth App; callback URL: `{AUTH_URL}/api/auth/callback/github`
 - **Microsoft**: Register app in Azure Portal (Entra ID); redirect URI: `{AUTH_URL}/api/auth/callback/microsoft-entra-id`; grant `openid`, `profile`, `email` scopes
 
+```bash
+# Super-admin bootstrap
+SUPER_ADMIN_EMAIL=you@yourdomain.com  # Seed script grants superadmin role to this email
+
+# Observability — Sentry
+SENTRY_DSN=https://...@sentry.io/...
+SENTRY_AUTH_TOKEN=...                 # For source map upload in CI/CD only
+
+# Observability — Axiom
+AXIOM_DATASET=v0-guest-event-app
+AXIOM_TOKEN=...
+```
+
 ### Migration Strategy
 
 1. **Pre-migration**: export existing events from v1 DB
-2. **Apply v2 schema**: run Prisma migration (creates User, Invitee, Notification tables; updates Event)
-3. **Data migration script**: create a seed "legacy" admin user; re-assign all existing Events to that user
+2. **Apply v2 schema**: run Prisma migration (creates User, Account, Session, Invitee, Notification, AuditLog tables; updates Event)
+3. **Data migration script**: create a seed "legacy" admin user with `role = "owner"`; re-assign all existing Events to that user; grant `role = "superadmin"` to the email in `SUPER_ADMIN_EMAIL` env var
 4. **Post-migration verification**: confirm all event slugs are valid, all foreign keys intact
 
 ### Testing Approach
@@ -758,18 +947,21 @@ Each track should include:
 ```
 Week 1:
   - All agents read this plan and the v2 schema
-  - Agent A: DB migration + auth API + session middleware
+  - Agent A: DB migration + NextAuth config + session middleware + requireSuperAdmin()
   - Agent B: Marketing homepage (fully independent, ship first)
+  - Agent E: Sentry + Axiom wiring; super-admin metrics API + overview page
 
 Week 2:
   - Agent A: Owner dashboard + event URL restructure
-  - Agent C: Notification backend (uses mocked auth if Track A not merged yet)
-  - Agent D: Invitee backend (uses mocked auth if Track A not merged yet)
+  - Agent C: Notification backend (mocked auth until Track A merges)
+  - Agent D: Invitee backend (mocked auth until Track A merges)
+  - Agent E: Owner management pages + event explorer + guest search
 
 Week 3:
   - Agent A: Integration + final review
   - Agent C: Dashboard notification UI (after Track A dashboard shell merged)
   - Agent D: Dashboard invitee UI (after Track A dashboard shell merged)
+  - Agent E: Notification job monitor + impersonation + audit log
   - Integration testing across all tracks
 ```
 
@@ -777,11 +969,11 @@ Week 3:
 
 ## Out of Scope for v2.0
 
-- Pricing / billing / subscription management
+- Pricing / billing / subscription management (super-admin payments section will be a placeholder stub; Stripe integration is v2.1)
 - Team accounts (multiple owners per event)
 - Custom domains per owner
-- Analytics dashboard (beyond existing guest view)
 - In-app messaging between owner and guest
 - Mobile app
+- Public-facing status page (can be added via Instatus/Betterstack in v2.1 using the Axiom data already being collected)
 
 These are candidates for v2.1 and beyond.
