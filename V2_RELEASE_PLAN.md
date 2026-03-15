@@ -942,28 +942,204 @@ Each track should include:
 
 ---
 
-## Execution Order
+## Parallel Deployment Strategy
+
+### Dependency Graph
+
+Understanding what truly blocks what determines how many agents can run simultaneously and when.
 
 ```
-Week 1:
-  - All agents read this plan and the v2 schema
-  - Agent A: DB migration + NextAuth config + session middleware + requireSuperAdmin()
-  - Agent B: Marketing homepage (fully independent, ship first)
-  - Agent E: Sentry + Axiom wiring; super-admin metrics API + overview page
-
-Week 2:
-  - Agent A: Owner dashboard + event URL restructure
-  - Agent C: Notification backend (mocked auth until Track A merges)
-  - Agent D: Invitee backend (mocked auth until Track A merges)
-  - Agent E: Owner management pages + event explorer + guest search
-
-Week 3:
-  - Agent A: Integration + final review
-  - Agent C: Dashboard notification UI (after Track A dashboard shell merged)
-  - Agent D: Dashboard invitee UI (after Track A dashboard shell merged)
-  - Agent E: Notification job monitor + impersonation + audit log
-  - Integration testing across all tracks
+                    ┌──────────────────────────────┐
+                    │   Foundation PR (one agent)  │
+                    │   • Full Prisma schema       │
+                    │   • DB migration applied     │
+                    │   • lib/owner-auth.ts stub   │
+                    └──────────────┬───────────────┘
+                                   │
+          ┌────────────────────────┼────────────────────────┐
+          │                        │                        │
+    ┌─────▼──────┐          ┌──────▼──────┐         ┌──────▼──────┐
+    │  Track B   │          │  Tracks     │         │  Track E    │
+    │  Marketing │          │  C + D + E  │         │  Sentry /   │
+    │  Homepage  │          │  backends   │         │  Axiom only │
+    │            │          │  (stub auth)│         │             │
+    └─────┬──────┘          └──────┬──────┘         └──────┬──────┘
+          │                        │                        │
+          │              ┌─────────▼──────────┐            │
+          │              │  Gate 1            │            │
+          │              │  Track A: real     │            │
+          │              │  auth lands        │            │
+          │              │  (lib/owner-auth   │            │
+          │              │  no longer a stub) │            │
+          │              └─────────┬──────────┘            │
+          │                        │                        │
+          │              ┌─────────▼──────────┐            │
+          │              │  Tracks C, D, E    │            │
+          │              │  integrate real    │            │
+          │              │  auth; E unlocks   │            │
+          │              │  owner mgmt pages  │            │
+          │              └─────────┬──────────┘            │
+          │                        │
+          │              ┌─────────▼──────────┐
+          │              │  Gate 2            │
+          │              │  Track A: dashboard│
+          │              │  shell lands       │
+          │              │  (notification +   │
+          │              │  invitee tab pages │
+          │              │  exist as empty    │
+          │              │  route shells)     │
+          │              └─────────┬──────────┘
+          │                        │
+          │              ┌─────────▼──────────┐
+          │              │  Tracks C + D      │
+          │              │  build dashboard   │
+          │              │  UI into shells    │
+          └──────────────┴────────────────────┘
+                    All tracks merge → integration testing
 ```
+
+### The Three Hard Prerequisites
+
+#### Foundation PR (true prerequisite — must merge before any track starts)
+
+This is a **single standalone PR** done before any agent branches off feature work. It has no new behaviour, only shared infrastructure that all tracks depend on.
+
+**Deliverables:**
+
+1. **Full `schema.prisma` with all v2.0 models** — including every model across all tracks (`User`, `Account`, `Session`, `VerificationToken`, `Event` updated, `NotificationTemplate`, `ScheduledNotificationJob`, `Invitee`, `SuperAdminAuditLog`). All models defined in one place, one migration, zero merge conflicts later.
+
+2. **DB migration applied** — `prisma migrate dev` run once; migration SQL committed. Every agent gets a fully migrated schema on their first `git pull`.
+
+3. **`lib/owner-auth.ts` stub** — the file exists with the correct TypeScript signatures but backed by a hardcoded mock return value. This is the interface contract all other tracks code against. When Track A lands real auth, only this one file changes — no find-replace across tracks C, D, E.
+
+```typescript
+// lib/owner-auth.ts  — STUB (replaced when Track A merges real auth)
+export interface OwnerSession {
+  userId: string
+  email: string
+  name: string | null
+  ownerSlug: string
+  role: "owner" | "superadmin"
+}
+
+// Returns the stub session in development; will be replaced by Track A
+// with a real NextAuth-backed implementation
+export async function getOwnerSession(): Promise<OwnerSession | null> {
+  if (process.env.NODE_ENV === "development") {
+    return { userId: "stub-user", email: "dev@example.com", name: "Dev Owner", ownerSlug: "dev-owner", role: "owner" }
+  }
+  return null
+}
+
+export async function requireOwnerSession(): Promise<OwnerSession> {
+  const session = await getOwnerSession()
+  if (!session) throw new Response("Unauthorized", { status: 401 })
+  return session
+}
+
+export async function requireEventOwnership(eventId: string): Promise<OwnerSession> {
+  // Stub: real implementation checks Event.ownerId === session.userId
+  return requireOwnerSession()
+}
+
+export async function requireSuperAdmin(): Promise<OwnerSession> {
+  const session = await requireOwnerSession()
+  if (session.role !== "superadmin") throw new Response("Forbidden", { status: 403 })
+  return session
+}
+```
+
+> **Why a stub and not just mocking in tests?** Because agents C, D, E run their code in a real dev environment against the real DB. The stub makes their local dev work end-to-end without needing Track A's NextAuth config. When Track A replaces the stub with the real implementation, the other agents only need to `git pull` — their code is unchanged.
+
+---
+
+#### Gate 1 — Track A: Real Auth Lands
+
+**What it delivers:** `lib/owner-auth.ts` replaced with a real NextAuth-backed implementation. The function signatures are identical to the stub — agents C, D, E pull the change and their code works against real sessions with zero modifications.
+
+**Also delivers:** `/login`, `/signup` pages; NextAuth route handler; middleware protecting `/dashboard/*` and `/super-admin/*`.
+
+**What it unblocks:**
+- Tracks C, D, E can now run against real sessions in staging/production
+- Track E can build owner management pages (needs real `User.role` query)
+- The app can be deployed to staging for the first time with working auth
+
+**What it does NOT need to include yet:** The full owner dashboard event editor. That is Gate 2.
+
+---
+
+#### Gate 2 — Track A: Dashboard Shell Lands
+
+**What it delivers:** The route structure under `/dashboard/events/[eventId]/` including:
+- The event editor page (ported from existing admin dashboard)
+- An empty `/dashboard/events/[eventId]/notifications` page (just a heading + "coming soon")
+- An empty `/dashboard/events/[eventId]/invitees` page (same)
+
+These empty shells are what Tracks C and D need to inject their UI components into. Without the shell the route doesn't exist; their components have nowhere to mount.
+
+**What it unblocks:** Tracks C and D's frontend work (notification UI, invitee UI). All their backend work was already unblocked by the Foundation PR.
+
+---
+
+### What Can Run Fully in Parallel (No Gates Required)
+
+| Track | Can start immediately after Foundation PR? | Notes |
+|---|---|---|
+| **Track B** | Yes — even before Foundation PR | No DB dependency at all. Can start from day 1. |
+| **Track C backend** | Yes | Uses stub auth. API routes and pg-boss job system work against real DB. |
+| **Track D backend** | Yes | Uses stub auth. CSV parsing, invitee CRUD, invite sending all independent. |
+| **Track E — Sentry/Axiom** | Yes — even before Foundation PR | Just SDK config and `instrumentation.ts`. No DB required. |
+| **Track E — metrics API** | Yes, after Foundation PR | Metrics queries read existing tables (`User`, `Event`, `Guest`). |
+| **Track A** | Yes, after Foundation PR | Has no dependencies on other tracks. |
+
+| Track | Requires Gate 1? | Requires Gate 2? |
+|---|---|---|
+| Track C — real session integration | Yes | No |
+| Track D — real session integration | Yes | No |
+| Track E — owner management pages | Yes | No |
+| Track C — dashboard UI | No | **Yes** |
+| Track D — dashboard UI | No | **Yes** |
+| Track E — notification job monitor | No (reads DB directly) | No |
+
+---
+
+### Recommended Execution Sequence
+
+```
+Day 1-2:   Foundation PR
+           └── One agent: schema, migration, lib/owner-auth.ts stub
+               All other agents read the plan, set up local dev
+
+Day 2+:    5 agents start in parallel
+           ├── Agent A: NextAuth config → login/signup pages → middleware → real lib/owner-auth.ts
+           ├── Agent B: Marketing homepage (ships independently, no gates)
+           ├── Agent C: Notification API + pg-boss + email/SMS (stub auth)
+           ├── Agent D: Invitee API + CSV import + invite sending (stub auth)
+           └── Agent E: Sentry/Axiom + metrics API + super-admin overview
+
+           ↓ Gate 1: Track A real auth merges (est. day 5-7)
+           ├── Agent C: Swap stub → real auth; test against real sessions
+           ├── Agent D: Swap stub → real auth; test against real sessions
+           └── Agent E: Owner management, event explorer, guest search pages
+
+           ↓ Gate 2: Track A dashboard shell merges (est. day 8-10)
+           ├── Agent C: Build notification UI into dashboard shell
+           ├── Agent D: Build invitee UI into dashboard shell
+           └── Agent E: Notification job monitor, impersonation, audit log
+
+           ↓ All tracks merged → integration testing → release
+```
+
+### Merge Order & Conflict Zones
+
+The Foundation PR eliminates almost all schema merge conflicts since it defines every model upfront. The remaining conflict risks are:
+
+| Risk | Location | Mitigation |
+|---|---|---|
+| Multiple tracks editing `instrumentation.ts` | Track C (pg-boss) and Track E (Sentry/Axiom) both touch this file | Track C owns pg-boss init; Track E owns Sentry/Axiom init; both sections are additive and non-overlapping |
+| `middleware.ts` updated by Track A | Tracks C/D/E assume the middleware structure | Track A owns `middleware.ts`; other tracks never touch it |
+| `prisma/schema.prisma` | Already solved by Foundation PR — no track adds new models | If a track discovers a needed schema addition, they open a small schema-only PR first |
+| `.env.example` | All tracks add env vars | Each track adds only its own vars to `.env.example`; standard text merge conflict, easy to resolve |
 
 ---
 
