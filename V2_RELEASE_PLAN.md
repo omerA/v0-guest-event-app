@@ -7,7 +7,7 @@ v2.0 transforms the app from a single-admin, single-event RSVP tool into a **mul
 ### New Features
 
 1. **Marketing Homepage** — public-facing landing page with service overview, feature highlights, and sign-up CTA
-2. **Owner Accounts & Dashboard** — email/password accounts replace the shared admin password; each owner manages their own events in an isolated namespace
+2. **Owner Accounts & Dashboard** — email/password accounts and popular social/IDP login replace the shared admin password; each owner manages their own events in an isolated namespace
 3. **Event Notifications** — owners configure one-time SMS/email blasts or scheduled reminders for guests
 4. **Invitee Management** — owners upload guest lists (CSV) and send personalised invite URLs via SMS or email
 
@@ -21,14 +21,58 @@ The complete target Prisma schema for v2.0. **All agents must treat this as the 
 
 ```prisma
 // NEW: Event owner accounts
+// passwordHash is nullable — OAuth-only users never set a password
 model User {
-  id            String   @id @default(cuid())
-  email         String   @unique
-  passwordHash  String
-  name          String
-  createdAt     DateTime @default(now())
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified DateTime?           // Required by NextAuth Prisma adapter
+  image         String?             // Avatar URL from OAuth provider
+  passwordHash  String?             // Null for OAuth-only users
+  name          String?
+  ownerSlug     String    @unique   // URL-safe handle, derived from email prefix at signup
+  createdAt     DateTime  @default(now())
+
   events        Event[]
   notifications NotificationTemplate[]
+  accounts      Account[]           // NextAuth: linked OAuth accounts
+  sessions      Session[]           // NextAuth: active sessions
+}
+
+// NEW: NextAuth Prisma adapter — linked OAuth accounts per user
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String                        // "google" | "github" | "azure-ad" | "credentials"
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+// NEW: NextAuth Prisma adapter — database sessions
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// NEW: NextAuth Prisma adapter — email verification tokens
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
 }
 
 // UPDATED: Event now belongs to a User owner
@@ -185,10 +229,62 @@ model Invitee {
 
 ### Authentication Strategy
 
-- **Owner auth**: Email + password (bcrypt hash stored in `User.passwordHash`)
-- **Session**: HTTP-only cookie with signed JWT (using `jose` library, same pattern as existing admin token)
-- **Guest auth**: Unchanged — phone OTP flow via Twilio
-- **Middleware**: `middleware.ts` protects `/dashboard/*` routes; redirects to `/login` if no valid session
+- **Library**: [NextAuth.js v5 (Auth.js)](https://authjs.dev) with the Prisma adapter
+- **Owner auth — credentials**: Email + password; `passwordHash` stored with bcrypt; handled via the `Credentials` provider
+- **Owner auth — IDP / OAuth**: Google, GitHub, and Microsoft (Azure AD) via their respective NextAuth providers; more providers can be added trivially by adding an env var pair
+- **Account linking**: NextAuth's Prisma adapter automatically links multiple OAuth accounts to the same `User` row when the email matches — an owner who signed up with Google can later also sign in with GitHub if the email is the same
+- **Session**: Database sessions via NextAuth + Prisma `Session` model; `auth()` helper available in server components and API routes
+- **Custom session fields**: Extend the NextAuth session callback to include `userId` and `ownerSlug` so all server code has access without an extra DB query
+- **Guest auth**: Unchanged — phone OTP flow via Twilio (`lib/otp.ts`)
+- **Middleware**: Use NextAuth's exported `auth` middleware to protect `/dashboard/*`; guest OTP flows remain unprotected
+
+**NextAuth configuration file** (`auth.ts` at repo root):
+
+```typescript
+import NextAuth from "next-auth"
+import { PrismaAdapter } from "@auth/prisma-adapter"
+import Google from "next-auth/providers/google"
+import GitHub from "next-auth/providers/github"
+import MicrosoftEntraId from "next-auth/providers/microsoft-entra-id"
+import Credentials from "next-auth/providers/credentials"
+import { prisma } from "@/lib/db"
+import bcrypt from "bcryptjs"
+
+export const { handlers, auth, signIn, signOut } = NextAuth({
+  adapter: PrismaAdapter(prisma),
+  providers: [
+    Google,
+    GitHub,
+    MicrosoftEntraId,
+    Credentials({
+      credentials: { email: {}, password: {} },
+      async authorize({ email, password }) {
+        const user = await prisma.user.findUnique({ where: { email: String(email) } })
+        if (!user?.passwordHash) return null
+        const valid = await bcrypt.compare(String(password), user.passwordHash)
+        return valid ? user : null
+      },
+    }),
+  ],
+  callbacks: {
+    async session({ session, user }) {
+      session.user.id = user.id
+      session.user.ownerSlug = (user as any).ownerSlug
+      return session
+    },
+  },
+})
+```
+
+**`middleware.ts`** — protect owner routes using NextAuth:
+
+```typescript
+export { auth as middleware } from "@/auth"
+
+export const config = {
+  matcher: ["/dashboard/:path*"],
+}
+```
 
 ### Notification Infrastructure
 
@@ -229,37 +325,78 @@ These four tracks have **minimal overlap** and can be developed simultaneously a
 ## Track A — Auth System & Owner Dashboard
 
 **Owner:** Agent A
-**Touches:** `prisma/schema.prisma`, `lib/`, `app/(auth)/`, `app/dashboard/`, `middleware.ts`, API routes under `/api/owner/`
+**Touches:** `prisma/schema.prisma`, `auth.ts`, `middleware.ts`, `lib/`, `app/(auth)/`, `app/dashboard/`, API routes under `/api/owner/`
 
 ### Scope
 
-#### 1. Database
+#### 1. Dependencies
+
+```
+pnpm add next-auth@beta @auth/prisma-adapter bcryptjs
+pnpm add -D @types/bcryptjs
+```
+
+#### 2. Database
 
 - Apply v2.0 migration:
-  - Add `User` model
+  - Add `User` model (with `ownerSlug`, nullable `passwordHash`, `emailVerified`, `image`)
+  - Add `Account`, `Session`, `VerificationToken` models (NextAuth Prisma adapter requirements)
   - Add `ownerId`, `slug` columns to `Event`; remove old string-based `@id`; add `@@unique([ownerId, slug])`
-  - Add `ownerSlug` field to `User` (URL-safe, unique handle — derived from email prefix at signup, editable)
   - Write migration SQL and Prisma migration file
 
-#### 2. Auth API
+#### 3. NextAuth Configuration (`auth.ts`)
 
-New routes under `/api/owner/auth/`:
+Create `auth.ts` at the repo root as shown in the Authentication Strategy section above. Enabled providers:
 
-| Route | Method | Purpose |
-|---|---|---|
-| `/api/owner/auth/signup` | POST | Create account (email, password, name) → set session cookie |
-| `/api/owner/auth/login` | POST | Verify credentials → set session cookie |
-| `/api/owner/auth/logout` | POST | Clear session cookie |
-| `/api/owner/auth/me` | GET | Return current session user |
+| Provider | Env vars required |
+|---|---|
+| Google | `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET` |
+| GitHub | `AUTH_GITHUB_ID`, `AUTH_GITHUB_SECRET` |
+| Microsoft (Entra ID) | `AUTH_MICROSOFT_ENTRA_ID_ID`, `AUTH_MICROSOFT_ENTRA_ID_SECRET`, `AUTH_MICROSOFT_ENTRA_ID_TENANT_ID` |
+| Credentials (email+password) | _(none — uses DB)_ |
 
-Session: signed JWT in `owner_session` HTTP-only cookie, 30-day expiry, using `jose`.
+Common NextAuth vars: `AUTH_SECRET` (replaces `JWT_SECRET`), `AUTH_URL` (base URL in production).
 
-#### 3. Middleware
+#### 4. Route Handler
 
-Update `middleware.ts`:
-- Protect `/dashboard/*` → redirect to `/login` if no valid `owner_session`
-- Keep guest OTP flows unprotected
-- Redirect `/admin*` → `/dashboard` (legacy)
+Create `app/api/auth/[...nextauth]/route.ts`:
+
+```typescript
+import { handlers } from "@/auth"
+export const { GET, POST } = handlers
+```
+
+This replaces the old `/api/admin/auth` and is the only auth route handler needed.
+
+#### 5. Sign-up Flow
+
+NextAuth handles sign-in for OAuth providers automatically. For the credentials (email+password) flow, sign-in exists but sign-up does not — it must be built as a custom form:
+
+- `app/(auth)/signup/page.tsx` — form: name, email, password, confirm password
+- `POST /api/owner/auth/signup` — creates `User` row (bcrypt hash password, generate `ownerSlug`), then calls `signIn("credentials", ...)` to establish session
+
+OAuth sign-up is automatic: when a user signs in with Google/GitHub/Microsoft for the first time, NextAuth creates the `User` and `Account` rows. A database callback should generate `ownerSlug` at this point if not set.
+
+#### 6. Auth Pages
+
+- `app/(auth)/login/page.tsx` — shows "Sign in with Google", "Sign in with GitHub", "Sign in with Microsoft" buttons + email/password form; implemented using `signIn()` from `next-auth/react`
+- `app/(auth)/signup/page.tsx` — same OAuth buttons (they work for both sign-in and sign-up) + email/password registration form
+- Configure `pages.signIn = "/login"` in NextAuth options
+
+#### 7. Middleware
+
+```typescript
+// middleware.ts
+export { auth as middleware } from "@/auth"
+export const config = { matcher: ["/dashboard/:path*"] }
+```
+
+#### 8. `ownerSlug` Generation
+
+`ownerSlug` is not provided by OAuth providers and must be generated server-side:
+- Derive from `user.email` prefix (strip `@domain`), slugify (lowercase, replace non-alphanumeric with `-`), deduplicate with random suffix if taken
+- Set during sign-up (credentials) or in a NextAuth `signIn` event callback (OAuth)
+- Expose a "change handle" form in dashboard account settings
 
 #### 4. Owner Dashboard (`/dashboard`)
 
@@ -297,22 +434,40 @@ Update all existing event/admin API routes to use owner session instead of passw
 
 #### Interface Contracts (for Tracks C & D)
 
+Track A exposes a thin wrapper in `lib/owner-auth.ts` so other tracks never import from `next-auth` directly:
+
 ```typescript
-// Session shape available from cookie (jwt payload)
-interface OwnerSession {
+import { auth } from "@/auth"
+import { prisma } from "@/lib/db"
+
+// Augmented session shape (see NextAuth session callback in auth.ts)
+export interface OwnerSession {
   userId: string;
   email: string;
-  name: string;
+  name: string | null;
   ownerSlug: string;
 }
 
-// Helper available at lib/owner-auth.ts
-export async function getOwnerSession(req: Request): Promise<OwnerSession | null>
-export async function requireOwnerSession(req: Request): Promise<OwnerSession> // throws 401
+// Returns null if not logged in
+export async function getOwnerSession(): Promise<OwnerSession | null> {
+  const session = await auth()
+  if (!session?.user?.id) return null
+  return {
+    userId: session.user.id,
+    email: session.user.email!,
+    name: session.user.name ?? null,
+    ownerSlug: (session.user as any).ownerSlug,
+  }
+}
 
-// Event ownership guard
-export async function requireEventOwnership(req: Request, eventId: string): Promise<void>
+// Throws Response with 401 if not logged in — use in API route handlers
+export async function requireOwnerSession(): Promise<OwnerSession>
+
+// Throws Response with 403 if session user does not own the event
+export async function requireEventOwnership(eventId: string): Promise<OwnerSession>
 ```
+
+> Tracks C and D call `requireOwnerSession()` / `requireEventOwnership()` from this file. They do **not** import `auth` directly.
 
 ---
 
@@ -537,24 +692,43 @@ In `/dashboard/events/[eventId]/invitees` (shell created by Track A):
 ### Environment Variables (v2.0 additions)
 
 ```bash
-# Auth
-JWT_SECRET=...             # 32+ char random string for signing owner sessions
+# NextAuth (owner auth)
+AUTH_SECRET=...                          # 32+ char random string — replaces JWT_SECRET
+AUTH_URL=https://yourdomain.com          # Required in production
 
-# Email
-RESEND_API_KEY=re_...      # From resend.com
+# OAuth — Google
+AUTH_GOOGLE_ID=...
+AUTH_GOOGLE_SECRET=...
+
+# OAuth — GitHub
+AUTH_GITHUB_ID=...
+AUTH_GITHUB_SECRET=...
+
+# OAuth — Microsoft (Entra ID / Azure AD)
+AUTH_MICROSOFT_ENTRA_ID_ID=...
+AUTH_MICROSOFT_ENTRA_ID_SECRET=...
+AUTH_MICROSOFT_ENTRA_ID_TENANT_ID=...   # Use "common" for multi-tenant
+
+# Email (notifications)
+RESEND_API_KEY=re_...                    # From resend.com
 
 # Twilio Messaging (outbound SMS for notifications & invites)
-TWILIO_ACCOUNT_SID=...     # Existing
-TWILIO_AUTH_TOKEN=...      # Existing
-TWILIO_PHONE_NUMBER=+1...  # Sending phone number (NEW — different from Verify service)
+TWILIO_ACCOUNT_SID=...                   # Existing
+TWILIO_AUTH_TOKEN=...                    # Existing
+TWILIO_PHONE_NUMBER=+1...               # Sending phone number (NEW — different from Verify service)
 
-# Existing
-TWILIO_VERIFY_SERVICE_SID=...  # Keep for guest OTP
+# Existing — unchanged
+TWILIO_VERIFY_SERVICE_SID=...           # Keep for guest OTP
 DATABASE_URL=...
 UPLOADTHING_SECRET=...
 UPLOADTHING_APP_ID=...
 UNSPLASH_ACCESS_KEY=...
 ```
+
+**OAuth app setup checklist (for each provider):**
+- **Google**: Create OAuth 2.0 client in Google Cloud Console; add `{AUTH_URL}/api/auth/callback/google` as authorised redirect URI
+- **GitHub**: Create GitHub OAuth App; callback URL: `{AUTH_URL}/api/auth/callback/github`
+- **Microsoft**: Register app in Azure Portal (Entra ID); redirect URI: `{AUTH_URL}/api/auth/callback/microsoft-entra-id`; grant `openid`, `profile`, `email` scopes
 
 ### Migration Strategy
 
