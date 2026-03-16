@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { auth } from "@/auth"
 
 const encoder = new TextEncoder()
 
@@ -38,6 +39,19 @@ async function verifyAdminToken(token: string, secret: string): Promise<boolean>
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
+  // ── Owner dashboard + super-admin: NextAuth session check ─────────────────
+  if (pathname.startsWith("/dashboard") || pathname.startsWith("/super-admin")) {
+    const session = await auth()
+    if (!session?.user?.id) {
+      const loginUrl = new URL("/login", request.url)
+      loginUrl.searchParams.set("from", pathname)
+      return NextResponse.redirect(loginUrl)
+    }
+    return NextResponse.next()
+  }
+
+  // ── Legacy v1 admin: HMAC cookie check ────────────────────────────────────
+
   // Allow the login page and auth API through unconditionally
   if (pathname === "/admin/login" || pathname.startsWith("/api/admin/auth")) {
     return NextResponse.next()
@@ -63,5 +77,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/api/admin/:path*"],
+  matcher: ["/dashboard/:path*", "/super-admin/:path*", "/admin/:path*", "/api/admin/:path*"],
 }
